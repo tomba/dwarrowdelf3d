@@ -275,10 +275,74 @@ namespace Client3D
 							}
 						}
 
-						CreateCubicBlock(p, scene, baseTexture, topTexture, mask);
+						if (td.Type == VoxelType.Slope)
+							CreateSlope(p, scene, baseTexture, topTexture, mask);
+						else
+							CreateCubicBlock(p, scene, baseTexture, topTexture, mask);
 					}
 				}
 			}
+		}
+
+		void CreateSlope(IntVector3 p, TerrainRenderer scene,
+			FaceTexture baseTexture, FaceTexture topTexture,
+			FaceDirectionBits globalFaceMask)
+		{
+			var grid = m_map.Grid;
+			var vox = grid[p.Z, p.Y, p.X];
+
+			DirectionSet foo = 0;
+			foreach (var sp in DirectionSet.Planar.ToSurroundingPoints(p))
+			{
+				if (m_map.Size.Contains(sp) == false)
+					continue;
+
+				if (grid[sp.Z, sp.Y, sp.X].Type != VoxelType.Rock)
+					continue;
+
+				var dir = (sp - p).ToDirection();
+				switch (dir)
+				{
+					case Direction.NorthEast:
+					case Direction.NorthWest:
+					case Direction.SouthEast:
+					case Direction.SouthWest:
+						foo |= dir.ToDirectionSet();
+						break;
+
+					case Direction.North:
+						foo |= DirectionSet.NorthWest;
+						foo |= DirectionSet.NorthEast;
+						break;
+
+					case Direction.South:
+						foo |= DirectionSet.SouthWest;
+						foo |= DirectionSet.SouthEast;
+						break;
+
+					case Direction.East:
+						foo |= DirectionSet.NorthEast;
+						foo |= DirectionSet.SouthEast;
+						break;
+
+					case Direction.West:
+						foo |= DirectionSet.NorthWest;
+						foo |= DirectionSet.SouthWest;
+						break;
+
+					default:
+						throw new Exception();
+				}
+			}
+
+			if ((vox.Dir & (1 << 0)) != 0)
+				CreateSmallCube(p, FaceDirectionBits.All, 0, baseTexture, topTexture, new IntVector3(0, 0, 0));
+			if ((vox.Dir & (1 << 1)) != 0)
+				CreateSmallCube(p, FaceDirectionBits.All, 0, baseTexture, topTexture, new IntVector3(0, 1, 0));
+			if ((vox.Dir & (1 << 2)) != 0)
+				CreateSmallCube(p, FaceDirectionBits.All, 0, baseTexture, topTexture, new IntVector3(1, 0, 0));
+			if ((vox.Dir & (1 << 3)) != 0)
+				CreateSmallCube(p, FaceDirectionBits.All, 0, baseTexture, topTexture, new IntVector3(1, 1, 0));
 		}
 
 		void CreateCubicBlock(IntVector3 p, TerrainRenderer scene,
@@ -387,7 +451,39 @@ namespace Client3D
 					else
 						occ = GetOcclusionForFaceVertex(p, (FaceDirection)side, s_cubeIndices[i]);
 
-					var vd = new TerrainVertex(vertices[s_cubeIndices[i]] + offset, occ,
+					var vd = new TerrainVertex((vertices[s_cubeIndices[i]] + offset) * 2, occ,
+						side == (int)FaceDirection.PositiveZ ? topTexture : baseTexture);
+					m_vertexList.Add(vd);
+				}
+			}
+		}
+
+		void CreateSmallCube(IntVector3 p, FaceDirectionBits faceMask, FaceDirectionBits hiddenFaceMask,
+			FaceTexture baseTexture, FaceTexture topTexture, IntVector3 extraOffset)
+		{
+			var grid = m_map.Grid;
+
+			var offset = p - this.ChunkOffset;
+
+			int sides = (int)faceMask;
+
+			for (int side = 0; side < 6 && sides != 0; ++side, sides >>= 1)
+			{
+				if ((sides & 1) == 0)
+					continue;
+
+				var vertices = s_intCubeFaces[side];
+
+				for (int i = 0; i < 4; ++i)
+				{
+					int occ;
+
+					if (((int)hiddenFaceMask & (1 << side)) != 0)
+						occ = 4;
+					else
+						occ = GetOcclusionForFaceVertex(p, (FaceDirection)side, s_cubeIndices[i]);
+
+					var vd = new TerrainVertex(vertices[s_cubeIndices[i]] + extraOffset + offset * 2, occ,
 						side == (int)FaceDirection.PositiveZ ? topTexture : baseTexture);
 					m_vertexList.Add(vd);
 				}
@@ -438,6 +534,16 @@ namespace Client3D
 			InitOcclusionLookup();
 		}
 
+		static Quaternion[] s_rotationQuaternions = new Quaternion[]
+			{
+				Quaternion.RotationAxis(Vector3.UnitZ, -MathUtil.PiOverTwo),
+				Quaternion.RotationAxis(Vector3.UnitZ, MathUtil.PiOverTwo),
+				Quaternion.RotationAxis(Vector3.UnitZ, 0),
+				Quaternion.RotationAxis(Vector3.UnitZ, MathUtil.Pi),
+				Quaternion.RotationAxis(Vector3.UnitX, MathUtil.PiOverTwo),
+				Quaternion.RotationAxis(Vector3.UnitX, -MathUtil.PiOverTwo),
+			};
+
 		static void CreateCubeFaces()
 		{
 			/*  south face */
@@ -446,16 +552,6 @@ namespace Client3D
 				new Vector3( 1,  1,  1),
 				new Vector3( 1,  1, -1),
 				new Vector3(-1,  1, -1),
-			};
-
-			var rotQs = new Quaternion[]
-			{
-				Quaternion.RotationAxis(Vector3.UnitZ, -MathUtil.PiOverTwo),
-				Quaternion.RotationAxis(Vector3.UnitZ, MathUtil.PiOverTwo),
-				Quaternion.RotationAxis(Vector3.UnitZ, 0),
-				Quaternion.RotationAxis(Vector3.UnitZ, MathUtil.Pi),
-				Quaternion.RotationAxis(Vector3.UnitX, MathUtil.PiOverTwo),
-				Quaternion.RotationAxis(Vector3.UnitX, -MathUtil.PiOverTwo),
 			};
 
 			s_cubeFaces = new Vector3[6][];
@@ -468,7 +564,7 @@ namespace Client3D
 
 				for (int vn = 0; vn < 4; ++vn)
 				{
-					face[vn] = Vector3.Transform(south[vn], rotQs[side]) / 2.0f;
+					face[vn] = Vector3.Transform(south[vn], s_rotationQuaternions[side]) / 2.0f;
 					intFace[vn] = (face[vn] + 0.5f).ToIntVector3();
 				}
 

@@ -61,7 +61,7 @@ GS_IN VSMain(VS_IN input)
 	GS_IN output = (GS_IN)0;
 
 	// Change the position vector to be 4 units for proper matrix calculations.
-	float4 pos = float4(input.pos.xyz, 1.0f);
+	float4 pos = float4(input.pos.xyz / 2.0f, 1.0f);
 	pos.xyz += g_chunkOffset;
 
 	output.pos = pos;

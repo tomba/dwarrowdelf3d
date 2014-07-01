@@ -55,7 +55,7 @@ namespace Client3D
 		{
 			const string mapname = "voxelmap.dat";
 
-			bool newmap = false;
+			bool newmap = true;
 
 			VoxelMap map;
 
@@ -68,8 +68,12 @@ namespace Client3D
 				map = VoxelMap.CreateFromTileData(new GameMap().Grid);
 				//map = VoxelMap.CreateBallMap(32, 16);
 				//map = VoxelMapGen.CreateTerrain(new IntSize3(128, 128, 64));
+				//map = VoxelMap.CreateSlopeTest1();
+				//map = VoxelMap.CreateSlopeTest2();
+				//map = VoxelMap.CreateSlopeTest2();
+				//map = VoxelMap.CreateSlopeTest3();
 
-
+				map.CheckSlopeDirs();
 				map.UndefineHiddenVoxels();
 				map.CheckVisibleFaces();
 
