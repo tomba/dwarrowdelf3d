@@ -1,6 +1,7 @@
 ﻿using SharpDX;
 using SharpDX.Toolkit;
 using SharpDX.Toolkit.Graphics;
+using System.Threading.Tasks;
 
 namespace Client3D
 {
@@ -59,21 +60,22 @@ namespace Client3D
 
 			int size = SIZE;
 			var arr = new float[size, size, size];
-			for (int i = 0; i < size; i++)
+			Parallel.For(0, size, x =>
+			//for (int x = 0; x < size; x++)
 			{
-				for (int j = 0; j < size; j++)
+				for (int y = 0; y < size; y++)
 				{
-					for (int k = 0; k < size; k++)
+					for (int z = 0; z < size; z++)
 					{
-						var v = new Vector3(i, j, k);
+						var v = new Vector3(x, y, z);
 						v /= size;
 						v -= 0.5f;
 						v *= 2;
-						arr[i, j, k] = (float)noise.GetValue(v.X, v.Y, v.Z);
-						//arr[i, j, k] = v.X * v.X + v.Y * v.Y + v.Z * v.Z - 1;
+						arr[x, y, z] = (float)noise.GetValue(v.X, v.Y, v.Z);
+						//arr[x, y, z] = v.X * v.X + v.Y * v.Y + v.Z * v.Z - 1;
 					}
 				}
-			}
+			});
 			m_arr = arr;
 		}
 
@@ -111,7 +113,8 @@ namespace Client3D
 			m_basicEffect.Texture = m_cubeTexture;
 			m_basicEffect.World = m_cubeTransform;
 
-			m_prim.Draw(m_basicEffect);
+			if (m_prim != null)
+				m_prim.Draw(m_basicEffect);
 		}
 	}
 }

@@ -405,11 +405,11 @@ namespace Client3D
 		{
 			primitive.Clear();
 
-			for (int i = 0; i < s_size; i++)
-				for (int j = 0; j < s_size; j++)
-					for (int k = 0; k < s_size; k++)
+			for (int x = 0; x < s_size; x++)
+				for (int y = 0; y < s_size; y++)
+					for (int z = 0; z < s_size; z++)
 					{
-						int triNum = Polygonise(i, j, k, isolevel);
+						int triNum = Polygonise(x, y, z, isolevel);
 
 						if (triNum > 0)
 							Build(primitive, triNum);
