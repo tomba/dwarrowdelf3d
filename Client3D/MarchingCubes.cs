@@ -318,7 +318,6 @@ namespace Client3D
 		}
 
 		static GridCell[, ,] s_grids;
-		static Triangle[] s_triangles;
 		static int s_size;
 
 		public static float[, ,] Gdata { get; set; }
@@ -348,13 +347,6 @@ namespace Client3D
 						s_grids[i, j, k].P[7] = new Vector3(i, j + 1, k + 1);
 					}
 				}
-			}
-
-			s_triangles = new Triangle[16];
-
-			for (int i = 0; i < 16; i++)
-			{
-				s_triangles[i].P = new Vector3[3];
 			}
 		}
 
@@ -409,10 +401,7 @@ namespace Client3D
 				for (int y = 0; y < s_size; y++)
 					for (int z = 0; z < s_size; z++)
 					{
-						int triNum = Polygonise(x, y, z, isolevel);
-
-						if (triNum > 0)
-							Build(primitive, triNum);
+						Polygonise(x, y, z, isolevel, primitive);
 					}
 
 			if (primitive.CurrentVertex == 0)
@@ -421,7 +410,7 @@ namespace Client3D
 				primitive.InitializePrimitive(graphicsDevice);
 		}
 
-		static int Polygonise(int x, int y, int z, float isolevel)
+		static void Polygonise(int x, int y, int z, float isolevel, MarchCubesPrimitive res)
 		{
 			/* Determine the index into the edge table which tells us which vertices are inside of the surface */
 			byte cubeindex = 0;
@@ -436,7 +425,7 @@ namespace Client3D
 
 			/* Cube is entirely in/out of the surface */
 			if (s_edgeTable[cubeindex] == 0)
-				return 0;
+				return;
 
 			/* Find the vertices where the surface intersects the cube */
 
@@ -481,17 +470,22 @@ namespace Client3D
 
 			/* Create the triangle */
 
-			int ntriang = 0;
-
 			for (int i = 0; s_triTable[cubeindex, i] != -1; i += 3)
 			{
-				s_triangles[ntriang].P[0] = vertlist[s_triTable[cubeindex, i + 0]];
-				s_triangles[ntriang].P[1] = vertlist[s_triTable[cubeindex, i + 1]];
-				s_triangles[ntriang].P[2] = vertlist[s_triTable[cubeindex, i + 2]];
-				ntriang++;
-			}
+				var p0 = vertlist[s_triTable[cubeindex, i + 0]];
+				var p1 = vertlist[s_triTable[cubeindex, i + 1]];
+				var p2 = vertlist[s_triTable[cubeindex, i + 2]];
 
-			return ntriang;
+				res.AddIndex(res.VertexCount + 0);
+				res.AddIndex(res.VertexCount + 1);
+				res.AddIndex(res.VertexCount + 2);
+
+				Vector3 normal = Vector3.Cross(p1 - p0, p2 - p0);
+
+				res.AddVertex(p0, normal);
+				res.AddVertex(p1, normal);
+				res.AddVertex(p2, normal);
+			}
 		}
 
 		static Vector3 VertexInterp(float isolevel, Vector3 p1, Vector3 p2, float valp1, float valp2)
@@ -506,22 +500,6 @@ namespace Client3D
 			float mu = (isolevel - valp1) / (valp2 - valp1);
 
 			return p1 + mu * (p2 - p1);
-		}
-
-		static void Build(MarchCubesPrimitive res, int trianglesNum)
-		{
-			for (int i = 0; i < trianglesNum; i++)
-			{
-				res.AddIndex(res.VertexCount + 0);
-				res.AddIndex(res.VertexCount + 1);
-				res.AddIndex(res.VertexCount + 2);
-
-				Vector3 normal = Vector3.Cross(s_triangles[i].P[1] - s_triangles[i].P[0], s_triangles[i].P[2] - s_triangles[i].P[0]);
-
-				res.AddVertex(s_triangles[i].P[0], normal);
-				res.AddVertex(s_triangles[i].P[1], normal);
-				res.AddVertex(s_triangles[i].P[2], normal);
-			}
 		}
 
 		public class MarchCubesPrimitive
