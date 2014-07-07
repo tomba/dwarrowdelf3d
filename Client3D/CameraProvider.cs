@@ -47,8 +47,8 @@ namespace Client3D
 			SetLens(MathUtil.PiOverFour, 1.0f, 1.0f, 200.0f);
 
 			//LookAt(new Vector3(10, 10, 10), new Vector3(0, 0, 0), Vector3.UnitZ);
-			LookAt(new Vector3(-5, -4, 32), new Vector3(40, 40, 0), Vector3.UnitZ);
-			//LookAt(new Vector3(-2, 0, 5), new Vector3(0, 0, 0), Vector3.UnitZ);
+			//LookAt(new Vector3(-5, -4, 32), new Vector3(40, 40, 0), Vector3.UnitZ);
+			LookAt(new Vector3(-60, 60, 60), new Vector3(30, 30, 30), Vector3.UnitZ);
 
 			// add this system in the list of services
 			game.Services.AddService(typeof(ICameraService), this);
