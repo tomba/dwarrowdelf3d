@@ -11,7 +11,7 @@ namespace Client3D
 	public static class Poligonizator
 	{
 		#region tables
-		static int[] s_edgeTable = new int[256]
+		static readonly int[] s_edgeTable = new int[256]
 		{
             0x0  , 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c,
             0x80c, 0x905, 0xa0f, 0xb06, 0xc0a, 0xd03, 0xe09, 0xf00,
@@ -47,7 +47,7 @@ namespace Client3D
             0x70c, 0x605, 0x50f, 0x406, 0x30a, 0x203, 0x109, 0x0
         };
 
-		static int[,] s_triTable = new int[256, 16] {
+		static readonly int[,] s_triTable = new int[256, 16] {
 		{ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 },
         { 0, 8, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 },
         { 0, 1, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 },
@@ -479,6 +479,7 @@ namespace Client3D
 
 		static Vector3 VertexInterp(float isolevel, Vector3 p1, Vector3 p2, float valp1, float valp2)
 		{
+			/* These shortcuts seem to improve perf */
 			if (Math.Abs(isolevel - valp1) < 0.00001)
 				return p1;
 			if (Math.Abs(isolevel - valp2) < 0.00001)
@@ -488,7 +489,7 @@ namespace Client3D
 
 			float mu = (isolevel - valp1) / (valp2 - valp1);
 
-			return p1 + mu * (p2 - p1);
+			return Vector3.Lerp(p1, p2, mu);
 		}
 
 		public class MarchCubesPrimitive

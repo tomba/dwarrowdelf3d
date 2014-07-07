@@ -71,8 +71,11 @@ namespace Client3D
 						v /= size;
 						v -= 0.5f;
 						v *= 2;
-						arr[x, y, z] = (float)noise.GetValue(v.X, v.Y, v.Z);
-						//arr[x, y, z] = v.X * v.X + v.Y * v.Y + v.Z * v.Z - 1;
+						float value = (float)noise.GetValue(v.X, v.Y, v.Z);
+
+						//float value = v.X * v.X + v.Y * v.Y + v.Z * v.Z - 1;
+
+						arr[x, y, z] = value;
 					}
 				}
 			});
