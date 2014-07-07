@@ -307,16 +307,6 @@ namespace Client3D
         };
 		#endregion
 
-		struct GridCell
-		{
-			public Vector3[] P;
-		}
-
-		struct Triangle
-		{
-			public Vector3[] P;
-		}
-
 		static int s_size;
 
 		public static float[, ,] Gdata { get; set; }
