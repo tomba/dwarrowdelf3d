@@ -58,7 +58,7 @@ namespace Client3D
 			};
 
 			int size = SIZE;
-			var arr = new double[size, size, size];
+			var arr = new float[size, size, size];
 			for (int i = 0; i < size; i++)
 			{
 				for (int j = 0; j < size; j++)
@@ -69,7 +69,8 @@ namespace Client3D
 						v /= size;
 						v -= 0.5f;
 						v *= 2;
-						arr[i, j, k] = noise.GetValue(v.X, v.Y, v.Z);
+						arr[i, j, k] = (float)noise.GetValue(v.X, v.Y, v.Z);
+						//arr[i, j, k] = v.X * v.X + v.Y * v.Y + v.Z * v.Z - 1;
 					}
 				}
 			}
@@ -79,12 +80,12 @@ namespace Client3D
 		void GenMesh()
 		{
 			Poligonizator.Init(SIZE - 1, m_arr, this.GraphicsDevice);
-			m_mesh = Poligonizator.Process(this.GraphicsDevice, 0.0);
+			m_mesh = Poligonizator.Process(this.GraphicsDevice, 0.0f);
 			m_prim = new GeometricPrimitive(this.GraphicsDevice, m_mesh.m_vertices.ToArray(), m_mesh.m_indices.ToArray(),
 				true);
 		}
 
-		double[, ,] m_arr;
+		float[, ,] m_arr;
 		Client3D.Poligonizator.MarchCubesPrimitive m_mesh;
 		GeometricPrimitive m_prim;
 

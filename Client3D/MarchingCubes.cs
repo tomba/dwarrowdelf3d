@@ -321,7 +321,7 @@ namespace Client3D
 		static Triangle[] s_triangles;
 		static int s_size;
 
-		public static double[, ,] Gdata { get; set; }
+		public static float[, ,] Gdata { get; set; }
 
 		static GraphicsDevice s_graphicsDevice;
 
@@ -358,13 +358,13 @@ namespace Client3D
 			}
 		}
 
-		public static void Init(int size, double[, ,] gdata, GraphicsDevice graphicsDevice)
+		public static void Init(int size, float[, ,] gdata, GraphicsDevice graphicsDevice)
 		{
 			Init(size, graphicsDevice);
 			Gdata = gdata;
 		}
 
-		static double GetVal(int x, int y, int z, int i)
+		static float GetVal(int x, int y, int z, int i)
 		{
 			switch (i)
 			{
@@ -394,27 +394,25 @@ namespace Client3D
 			return s_grids[x, y, z].P[i];
 		}
 
-		public static MarchCubesPrimitive Process(GraphicsDevice graphicsDevice, double isolevel)
+		public static MarchCubesPrimitive Process(GraphicsDevice graphicsDevice, float isolevel)
 		{
 			var res = new MarchCubesPrimitive();
 			Process(graphicsDevice, isolevel, res);
 			return res;
 		}
 
-		public static void Process(GraphicsDevice graphicsDevice, double isolevel, MarchCubesPrimitive primitive)
+		public static void Process(GraphicsDevice graphicsDevice, float isolevel, MarchCubesPrimitive primitive)
 		{
 			primitive.Clear();
 
-			int triNum = 0;
 			for (int i = 0; i < s_size; i++)
 				for (int j = 0; j < s_size; j++)
 					for (int k = 0; k < s_size; k++)
 					{
-						triNum = Polygonise(i, j, k, isolevel);
+						int triNum = Polygonise(i, j, k, isolevel);
+
 						if (triNum > 0)
-						{
 							Build(primitive, triNum);
-						}
 					}
 
 			if (primitive.CurrentVertex == 0)
@@ -423,11 +421,8 @@ namespace Client3D
 				primitive.InitializePrimitive(graphicsDevice);
 		}
 
-		static int Polygonise(int x, int y, int z, double isolevel)
+		static int Polygonise(int x, int y, int z, float isolevel)
 		{
-			var vertlist = new Vector3[12];
-			int i, ntriang = 0;
-
 			/* Determine the index into the edge table which tells us which vertices are inside of the surface */
 			byte cubeindex = 0;
 			if (GetVal(x, y, z, 0) > isolevel) cubeindex |= 1;
@@ -444,6 +439,9 @@ namespace Client3D
 				return 0;
 
 			/* Find the vertices where the surface intersects the cube */
+
+			var vertlist = new Vector3[12];
+
 			if ((s_edgeTable[cubeindex] & 1) != 0)
 				vertlist[0] =
 					VertexInterp(isolevel, GetPos(x, y, z, 0), GetPos(x, y, z, 1), GetVal(x, y, z, 0), GetVal(x, y, z, 1));
@@ -482,7 +480,10 @@ namespace Client3D
 				   VertexInterp(isolevel, GetPos(x, y, z, 3), GetPos(x, y, z, 7), GetVal(x, y, z, 3), GetVal(x, y, z, 7));
 
 			/* Create the triangle */
-			for (i = 0; s_triTable[cubeindex, i] != -1; i += 3)
+
+			int ntriang = 0;
+
+			for (int i = 0; s_triTable[cubeindex, i] != -1; i += 3)
 			{
 				s_triangles[ntriang].P[0] = vertlist[s_triTable[cubeindex, i + 0]];
 				s_triangles[ntriang].P[1] = vertlist[s_triTable[cubeindex, i + 1]];
@@ -493,11 +494,8 @@ namespace Client3D
 			return ntriang;
 		}
 
-		static Vector3 VertexInterp(double isolevel, Vector3 p1, Vector3 p2, double valp1, double valp2)
+		static Vector3 VertexInterp(float isolevel, Vector3 p1, Vector3 p2, float valp1, float valp2)
 		{
-			double mu;
-			Vector3 p = new Vector3();
-
 			if (Math.Abs(isolevel - valp1) < 0.00001)
 				return p1;
 			if (Math.Abs(isolevel - valp2) < 0.00001)
@@ -505,13 +503,9 @@ namespace Client3D
 			if (Math.Abs(valp1 - valp2) < 0.00001)
 				return p1;
 
-			mu = (isolevel - valp1) / (valp2 - valp1);
+			float mu = (isolevel - valp1) / (valp2 - valp1);
 
-			p.X = (float)(p1.X + mu * (p2.X - p1.X));
-			p.Y = (float)(p1.Y + mu * (p2.Y - p1.Y));
-			p.Z = (float)(p1.Z + mu * (p2.Z - p1.Z));
-
-			return p;
+			return p1 + mu * (p2 - p1);
 		}
 
 		static void Build(MarchCubesPrimitive res, int trianglesNum)
