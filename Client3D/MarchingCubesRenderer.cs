@@ -49,7 +49,7 @@ namespace Client3D
 			System.Windows.Forms.MessageBox.Show(string.Format("Took {0} ms", sw.ElapsedMilliseconds));
 		}
 
-		const int SIZE = 128;
+		const int SIZE = 256;
 
 		void GenArray()
 		{

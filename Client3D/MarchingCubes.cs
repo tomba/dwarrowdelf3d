@@ -317,7 +317,6 @@ namespace Client3D
 			public Vector3[] P;
 		}
 
-		static GridCell[, ,] s_grids;
 		static int s_size;
 
 		public static float[, ,] Gdata { get; set; }
@@ -328,26 +327,6 @@ namespace Client3D
 		{
 			s_graphicsDevice = graphicsDevice;
 			s_size = size;
-			s_grids = new GridCell[size, size, size];
-
-			for (int i = 0; i < size; i++)
-			{
-				for (int j = 0; j < size; j++)
-				{
-					for (int k = 0; k < size; k++)
-					{
-						s_grids[i, j, k].P = new Vector3[8];
-						s_grids[i, j, k].P[0] = new Vector3(i, j, k);
-						s_grids[i, j, k].P[1] = new Vector3(i + 1, j, k);
-						s_grids[i, j, k].P[2] = new Vector3(i + 1, j + 1, k);
-						s_grids[i, j, k].P[3] = new Vector3(i, j + 1, k);
-						s_grids[i, j, k].P[4] = new Vector3(i, j, k + 1);
-						s_grids[i, j, k].P[5] = new Vector3(i + 1, j, k + 1);
-						s_grids[i, j, k].P[6] = new Vector3(i + 1, j + 1, k + 1);
-						s_grids[i, j, k].P[7] = new Vector3(i, j + 1, k + 1);
-					}
-				}
-			}
 		}
 
 		public static void Init(int size, float[, ,] gdata, GraphicsDevice graphicsDevice)
@@ -383,7 +362,27 @@ namespace Client3D
 
 		static Vector3 GetPos(int x, int y, int z, int i)
 		{
-			return s_grids[x, y, z].P[i];
+			switch (i)
+			{
+				case 0:
+					return new Vector3(x, y, z);
+				case 1:
+					return new Vector3(x + 1, y, z);
+				case 2:
+					return new Vector3(x + 1, y + 1, z);
+				case 3:
+					return new Vector3(x, y + 1, z);
+				case 4:
+					return new Vector3(x, y, z + 1);
+				case 5:
+					return new Vector3(x + 1, y, z + 1);
+				case 6:
+					return new Vector3(x + 1, y + 1, z + 1);
+				case 7:
+					return new Vector3(x, y + 1, z + 1);
+				default:
+					throw new Exception();
+			}
 		}
 
 		public static MarchCubesPrimitive Process(GraphicsDevice graphicsDevice, float isolevel)
