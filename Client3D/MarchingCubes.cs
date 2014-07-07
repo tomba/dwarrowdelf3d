@@ -384,8 +384,9 @@ namespace Client3D
 					return Gdata[x + 1, y + 1, z + 1];
 				case 7:
 					return Gdata[x, y + 1, z + 1];
+				default:
+					throw new Exception();
 			}
-			return 0;
 		}
 
 		static Vector3 GetPos(int x, int y, int z, int i)
@@ -396,11 +397,11 @@ namespace Client3D
 		public static MarchCubesPrimitive Process(GraphicsDevice graphicsDevice, double isolevel)
 		{
 			var res = new MarchCubesPrimitive();
-			Process(graphicsDevice, isolevel, ref res);
+			Process(graphicsDevice, isolevel, res);
 			return res;
 		}
 
-		public static void Process(GraphicsDevice graphicsDevice, double isolevel, ref MarchCubesPrimitive primitive)
+		public static void Process(GraphicsDevice graphicsDevice, double isolevel, MarchCubesPrimitive primitive)
 		{
 			primitive.Clear();
 
@@ -412,7 +413,7 @@ namespace Client3D
 						triNum = Polygonise(i, j, k, isolevel);
 						if (triNum > 0)
 						{
-							Build(ref primitive, triNum);
+							Build(primitive, triNum);
 						}
 					}
 
@@ -426,8 +427,9 @@ namespace Client3D
 		{
 			var vertlist = new Vector3[12];
 			int i, ntriang = 0;
-			byte cubeindex = 0;
 
+			/* Determine the index into the edge table which tells us which vertices are inside of the surface */
+			byte cubeindex = 0;
 			if (GetVal(x, y, z, 0) > isolevel) cubeindex |= 1;
 			if (GetVal(x, y, z, 1) > isolevel) cubeindex |= 2;
 			if (GetVal(x, y, z, 2) > isolevel) cubeindex |= 4;
@@ -442,46 +444,47 @@ namespace Client3D
 				return 0;
 
 			/* Find the vertices where the surface intersects the cube */
-			if ((s_edgeTable[cubeindex] & 1) > 0)
-				vertlist[0] = VertexInterp(isolevel, GetPos(x, y, z, 0), GetPos(x, y, z, 1), GetVal(x, y, z, 0), GetVal(x, y, z, 1));
-			if ((s_edgeTable[cubeindex] & 2) > 0)
+			if ((s_edgeTable[cubeindex] & 1) != 0)
+				vertlist[0] =
+					VertexInterp(isolevel, GetPos(x, y, z, 0), GetPos(x, y, z, 1), GetVal(x, y, z, 0), GetVal(x, y, z, 1));
+			if ((s_edgeTable[cubeindex] & 2) != 0)
 				vertlist[1] =
 				   VertexInterp(isolevel, GetPos(x, y, z, 1), GetPos(x, y, z, 2), GetVal(x, y, z, 1), GetVal(x, y, z, 2));
-			if ((s_edgeTable[cubeindex] & 4) > 0)
+			if ((s_edgeTable[cubeindex] & 4) != 0)
 				vertlist[2] =
 				   VertexInterp(isolevel, GetPos(x, y, z, 2), GetPos(x, y, z, 3), GetVal(x, y, z, 2), GetVal(x, y, z, 3));
-			if ((s_edgeTable[cubeindex] & 8) > 0)
+			if ((s_edgeTable[cubeindex] & 8) != 0)
 				vertlist[3] =
 				   VertexInterp(isolevel, GetPos(x, y, z, 3), GetPos(x, y, z, 0), GetVal(x, y, z, 3), GetVal(x, y, z, 0));
-			if ((s_edgeTable[cubeindex] & 16) > 0)
+			if ((s_edgeTable[cubeindex] & 16) != 0)
 				vertlist[4] =
 				   VertexInterp(isolevel, GetPos(x, y, z, 4), GetPos(x, y, z, 5), GetVal(x, y, z, 4), GetVal(x, y, z, 5));
-			if ((s_edgeTable[cubeindex] & 32) > 0)
+			if ((s_edgeTable[cubeindex] & 32) != 0)
 				vertlist[5] =
 				   VertexInterp(isolevel, GetPos(x, y, z, 5), GetPos(x, y, z, 6), GetVal(x, y, z, 5), GetVal(x, y, z, 6));
-			if ((s_edgeTable[cubeindex] & 64) > 0)
+			if ((s_edgeTable[cubeindex] & 64) != 0)
 				vertlist[6] =
 				   VertexInterp(isolevel, GetPos(x, y, z, 6), GetPos(x, y, z, 7), GetVal(x, y, z, 6), GetVal(x, y, z, 7));
-			if ((s_edgeTable[cubeindex] & 128) > 0)
+			if ((s_edgeTable[cubeindex] & 128) != 0)
 				vertlist[7] =
 				   VertexInterp(isolevel, GetPos(x, y, z, 7), GetPos(x, y, z, 4), GetVal(x, y, z, 7), GetVal(x, y, z, 4));
-			if ((s_edgeTable[cubeindex] & 256) > 0)
+			if ((s_edgeTable[cubeindex] & 256) != 0)
 				vertlist[8] =
 				   VertexInterp(isolevel, GetPos(x, y, z, 0), GetPos(x, y, z, 4), GetVal(x, y, z, 0), GetVal(x, y, z, 4));
-			if ((s_edgeTable[cubeindex] & 512) > 0)
+			if ((s_edgeTable[cubeindex] & 512) != 0)
 				vertlist[9] =
 				   VertexInterp(isolevel, GetPos(x, y, z, 1), GetPos(x, y, z, 5), GetVal(x, y, z, 1), GetVal(x, y, z, 5));
-			if ((s_edgeTable[cubeindex] & 1024) > 0)
+			if ((s_edgeTable[cubeindex] & 1024) != 0)
 				vertlist[10] =
 				   VertexInterp(isolevel, GetPos(x, y, z, 2), GetPos(x, y, z, 6), GetVal(x, y, z, 2), GetVal(x, y, z, 6));
-			if ((s_edgeTable[cubeindex] & 2048) > 0)
+			if ((s_edgeTable[cubeindex] & 2048) != 0)
 				vertlist[11] =
 				   VertexInterp(isolevel, GetPos(x, y, z, 3), GetPos(x, y, z, 7), GetVal(x, y, z, 3), GetVal(x, y, z, 7));
 
 			/* Create the triangle */
 			for (i = 0; s_triTable[cubeindex, i] != -1; i += 3)
 			{
-				s_triangles[ntriang].P[0] = vertlist[s_triTable[cubeindex, i]];
+				s_triangles[ntriang].P[0] = vertlist[s_triTable[cubeindex, i + 0]];
 				s_triangles[ntriang].P[1] = vertlist[s_triTable[cubeindex, i + 1]];
 				s_triangles[ntriang].P[2] = vertlist[s_triTable[cubeindex, i + 2]];
 				ntriang++;
@@ -511,7 +514,7 @@ namespace Client3D
 			return p;
 		}
 
-		static void Build(ref MarchCubesPrimitive res, int trianglesNum)
+		static void Build(MarchCubesPrimitive res, int trianglesNum)
 		{
 			for (int i = 0; i < trianglesNum; i++)
 			{
