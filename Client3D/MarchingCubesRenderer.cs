@@ -83,8 +83,7 @@ namespace Client3D
 
 		void GenMesh()
 		{
-			Poligonizator.Init(SIZE - 1, m_arr, this.GraphicsDevice);
-			m_mesh = Poligonizator.Process(this.GraphicsDevice, 0.0f);
+			m_mesh = Poligonizator.Process(m_arr, 0.0f);
 			m_prim = new GeometricPrimitive(this.GraphicsDevice, m_mesh.m_vertices.ToArray(), m_mesh.m_indices.ToArray(),
 				true);
 		}
