@@ -307,6 +307,12 @@ namespace Client3D
         };
 		#endregion
 
+		class Cell
+		{
+			public Vector3[] Pos = new Vector3[8];
+			public float[] Val = new float[8];
+		}
+
 		static float GetVal(float[, ,] data, int x, int y, int z, int i)
 		{
 			switch (i)
@@ -357,32 +363,55 @@ namespace Client3D
 			}
 		}
 
+		static readonly Vector3[] s_relativeCornerPositions = new Vector3[8] {
+			new Vector3(0, 0, 0),
+			new Vector3(1, 0, 0),
+			new Vector3(1, 1, 0),
+			new Vector3(0, 1, 0),
+			new Vector3(0, 0, 1),
+			new Vector3(1, 0, 1),
+			new Vector3(1, 1, 1),
+			new Vector3(0, 1, 1),
+		};
+
 		public static MarchCubesPrimitive Process(float[, ,] data, float isolevel)
 		{
 			var primitive = new MarchCubesPrimitive();
+
+			var cell = new Cell();
 
 			for (int z = 0; z < data.GetLength(0) - 1; z++)
 				for (int y = 0; y < data.GetLength(1) - 1; y++)
 					for (int x = 0; x < data.GetLength(2) - 1; x++)
 					{
-						Polygonise(data, x, y, z, isolevel, primitive);
+						// Loop over 8 cell corners
+						for (int i = 0; i < 8; ++i)
+						{
+							// Compute cell corner position
+							cell.Pos[i] = new Vector3(x, y, z) + s_relativeCornerPositions[i];
+
+							// Compute iso value
+							cell.Val[i] = GetVal(data, x, y, z, i);
+						}
+
+						Polygonise(cell, isolevel, primitive);
 					}
 
 			return primitive;
 		}
 
-		static void Polygonise(float[, ,] data, int x, int y, int z, float isolevel, MarchCubesPrimitive res)
+		static void Polygonise(Cell cell, float isolevel, MarchCubesPrimitive res)
 		{
 			/* Determine the index into the edge table which tells us which vertices are inside of the surface */
 			byte cubeindex = 0;
-			if (GetVal(data, x, y, z, 0) > isolevel) cubeindex |= 1;
-			if (GetVal(data, x, y, z, 1) > isolevel) cubeindex |= 2;
-			if (GetVal(data, x, y, z, 2) > isolevel) cubeindex |= 4;
-			if (GetVal(data, x, y, z, 3) > isolevel) cubeindex |= 8;
-			if (GetVal(data, x, y, z, 4) > isolevel) cubeindex |= 16;
-			if (GetVal(data, x, y, z, 5) > isolevel) cubeindex |= 32;
-			if (GetVal(data, x, y, z, 6) > isolevel) cubeindex |= 64;
-			if (GetVal(data, x, y, z, 7) > isolevel) cubeindex |= 128;
+			if (cell.Val[0] > isolevel) cubeindex |= 1;
+			if (cell.Val[1] > isolevel) cubeindex |= 2;
+			if (cell.Val[2] > isolevel) cubeindex |= 4;
+			if (cell.Val[3] > isolevel) cubeindex |= 8;
+			if (cell.Val[4] > isolevel) cubeindex |= 16;
+			if (cell.Val[5] > isolevel) cubeindex |= 32;
+			if (cell.Val[6] > isolevel) cubeindex |= 64;
+			if (cell.Val[7] > isolevel) cubeindex |= 128;
 
 			/* Cube is entirely in/out of the surface */
 			if (s_edgeTable[cubeindex] == 0)
@@ -393,41 +422,29 @@ namespace Client3D
 			var vertlist = new Vector3[12];
 
 			if ((s_edgeTable[cubeindex] & 1) != 0)
-				vertlist[0] =
-					VertexInterp(isolevel, GetPos(x, y, z, 0), GetPos(x, y, z, 1), GetVal(data, x, y, z, 0), GetVal(data, x, y, z, 1));
+				vertlist[0] = VertexInterp2(cell, isolevel, 0, 1);
 			if ((s_edgeTable[cubeindex] & 2) != 0)
-				vertlist[1] =
-				   VertexInterp(isolevel, GetPos(x, y, z, 1), GetPos(x, y, z, 2), GetVal(data, x, y, z, 1), GetVal(data, x, y, z, 2));
+				vertlist[1] = VertexInterp2(cell, isolevel, 1, 2);
 			if ((s_edgeTable[cubeindex] & 4) != 0)
-				vertlist[2] =
-				   VertexInterp(isolevel, GetPos(x, y, z, 2), GetPos(x, y, z, 3), GetVal(data, x, y, z, 2), GetVal(data, x, y, z, 3));
+				vertlist[2] = VertexInterp2(cell, isolevel, 2, 3);
 			if ((s_edgeTable[cubeindex] & 8) != 0)
-				vertlist[3] =
-				   VertexInterp(isolevel, GetPos(x, y, z, 3), GetPos(x, y, z, 0), GetVal(data, x, y, z, 3), GetVal(data, x, y, z, 0));
+				vertlist[3] = VertexInterp2(cell, isolevel, 3, 0);
 			if ((s_edgeTable[cubeindex] & 16) != 0)
-				vertlist[4] =
-				   VertexInterp(isolevel, GetPos(x, y, z, 4), GetPos(x, y, z, 5), GetVal(data, x, y, z, 4), GetVal(data, x, y, z, 5));
+				vertlist[4] = VertexInterp2(cell, isolevel, 4, 5);
 			if ((s_edgeTable[cubeindex] & 32) != 0)
-				vertlist[5] =
-				   VertexInterp(isolevel, GetPos(x, y, z, 5), GetPos(x, y, z, 6), GetVal(data, x, y, z, 5), GetVal(data, x, y, z, 6));
+				vertlist[5] = VertexInterp2(cell, isolevel, 5, 6);
 			if ((s_edgeTable[cubeindex] & 64) != 0)
-				vertlist[6] =
-				   VertexInterp(isolevel, GetPos(x, y, z, 6), GetPos(x, y, z, 7), GetVal(data, x, y, z, 6), GetVal(data, x, y, z, 7));
+				vertlist[6] = VertexInterp2(cell, isolevel, 6, 7);
 			if ((s_edgeTable[cubeindex] & 128) != 0)
-				vertlist[7] =
-				   VertexInterp(isolevel, GetPos(x, y, z, 7), GetPos(x, y, z, 4), GetVal(data, x, y, z, 7), GetVal(data, x, y, z, 4));
+				vertlist[7] = VertexInterp2(cell, isolevel, 7, 4);
 			if ((s_edgeTable[cubeindex] & 256) != 0)
-				vertlist[8] =
-				   VertexInterp(isolevel, GetPos(x, y, z, 0), GetPos(x, y, z, 4), GetVal(data, x, y, z, 0), GetVal(data, x, y, z, 4));
+				vertlist[8] = VertexInterp2(cell, isolevel, 0, 4);
 			if ((s_edgeTable[cubeindex] & 512) != 0)
-				vertlist[9] =
-				   VertexInterp(isolevel, GetPos(x, y, z, 1), GetPos(x, y, z, 5), GetVal(data, x, y, z, 1), GetVal(data, x, y, z, 5));
+				vertlist[9] = VertexInterp2(cell, isolevel, 1, 5);
 			if ((s_edgeTable[cubeindex] & 1024) != 0)
-				vertlist[10] =
-				   VertexInterp(isolevel, GetPos(x, y, z, 2), GetPos(x, y, z, 6), GetVal(data, x, y, z, 2), GetVal(data, x, y, z, 6));
+				vertlist[10] = VertexInterp2(cell, isolevel, 2, 6);
 			if ((s_edgeTable[cubeindex] & 2048) != 0)
-				vertlist[11] =
-				   VertexInterp(isolevel, GetPos(x, y, z, 3), GetPos(x, y, z, 7), GetVal(data, x, y, z, 3), GetVal(data, x, y, z, 7));
+				vertlist[11] = VertexInterp2(cell, isolevel, 3, 7);
 
 			/* Create the triangle */
 
@@ -451,8 +468,13 @@ namespace Client3D
 			}
 		}
 
-		static Vector3 VertexInterp(float isolevel, Vector3 p1, Vector3 p2, float valp1, float valp2)
+		static Vector3 VertexInterp2(Cell cell, float isolevel, int i, int j)
 		{
+			var p1 = cell.Pos[i];
+			var p2 = cell.Pos[j];
+			var valp1 = cell.Val[i];
+			var valp2 = cell.Val[j];
+
 			/* These shortcuts seem to improve perf */
 			if (Math.Abs(isolevel - valp1) < 0.00001)
 				return p1;
