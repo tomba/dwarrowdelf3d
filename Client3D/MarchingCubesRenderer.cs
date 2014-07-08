@@ -60,12 +60,11 @@ namespace Client3D
 
 			int size = SIZE;
 			var arr = new float[size, size, size];
-			Parallel.For(0, size, x =>
-			//for (int x = 0; x < size; x++)
+			Parallel.For(0, size, z =>
 			{
 				for (int y = 0; y < size; y++)
 				{
-					for (int z = 0; z < size; z++)
+					for (int x = 0; x < size; x++)
 					{
 						var v = new Vector3(x, y, z);
 						v /= size;
@@ -75,7 +74,7 @@ namespace Client3D
 
 						//float value = v.X * v.X + v.Y * v.Y + v.Z * v.Z - 1;
 
-						arr[x, y, z] = value;
+						arr[z, y, x] = value;
 					}
 				}
 			});

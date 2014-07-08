@@ -330,21 +330,21 @@ namespace Client3D
 			switch (i)
 			{
 				case 0:
-					return Gdata[x, y, z];
+					return Gdata[z, y, x];
 				case 1:
-					return Gdata[x + 1, y, z];
+					return Gdata[z, y, x + 1];
 				case 2:
-					return Gdata[x + 1, y + 1, z];
+					return Gdata[z, y + 1, x + 1];
 				case 3:
-					return Gdata[x, y + 1, z];
+					return Gdata[z, y + 1, x];
 				case 4:
-					return Gdata[x, y, z + 1];
+					return Gdata[z + 1, y, x];
 				case 5:
-					return Gdata[x + 1, y, z + 1];
+					return Gdata[z + 1, y, x + 1];
 				case 6:
-					return Gdata[x + 1, y + 1, z + 1];
+					return Gdata[z + 1, y + 1, x + 1];
 				case 7:
-					return Gdata[x, y + 1, z + 1];
+					return Gdata[z + 1, y + 1, x];
 				default:
 					throw new Exception();
 			}
@@ -386,9 +386,9 @@ namespace Client3D
 		{
 			primitive.Clear();
 
-			for (int x = 0; x < s_size; x++)
+			for (int z = 0; z < s_size; z++)
 				for (int y = 0; y < s_size; y++)
-					for (int z = 0; z < s_size; z++)
+					for (int x = 0; x < s_size; x++)
 					{
 						Polygonise(x, y, z, isolevel, primitive);
 					}
