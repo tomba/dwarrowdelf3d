@@ -93,6 +93,9 @@ namespace Client3D
 			m_chunkManager.Update(gameTime);
 		}
 
+		VertexInputLayout m_vertexInputLayout = VertexInputLayout.New<TerrainVertex>(0);
+		VertexInputLayout m_slopeVertexInputLayout = VertexInputLayout.New<SlopeVertex>(0);
+
 		public override void Draw(GameTime gameTime)
 		{
 			base.Draw(gameTime);
@@ -109,10 +112,27 @@ namespace Client3D
 
 				m_effect.SetDirectionalLight(m_directionalLight);
 
-				var renderPass = m_effect.CurrentTechnique.Passes[0];
+				device.SetVertexInputLayout(m_vertexInputLayout);
+
+				var renderPass = m_effect.CurrentTechnique.Passes["VoxelPass"];
 				renderPass.Apply();
 
 				m_chunkManager.Draw(gameTime);
+			}
+
+			// slopes
+			{
+				m_effect.EyePos = camera.Position;
+				m_effect.ViewProjection = camera.View * camera.Projection;
+
+				m_effect.SetDirectionalLight(m_directionalLight);
+
+				device.SetVertexInputLayout(m_slopeVertexInputLayout);
+
+				var renderPass = m_effect.CurrentTechnique.Passes["SlopePass"];
+				renderPass.Apply();
+
+				m_chunkManager.DrawSlopes();
 			}
 
 			// trees
@@ -130,7 +150,7 @@ namespace Client3D
 				var renderPass = m_symbolEffect.CurrentTechnique.Passes[0];
 				renderPass.Apply();
 
-				m_chunkManager.DrawTrees();
+				//m_chunkManager.DrawTrees();
 			}
 		}
 

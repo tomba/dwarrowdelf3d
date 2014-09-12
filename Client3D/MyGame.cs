@@ -35,6 +35,7 @@ namespace Client3D
 
 			this.IsMouseVisible = true;
 			m_graphicsDeviceManager = new GraphicsDeviceManager(this);
+			m_graphicsDeviceManager.DeviceCreationFlags = SharpDX.Direct3D11.DeviceCreationFlags.Debug;
 			//this.GameSystems.Add(new EffectCompilerSystem(this));		// allows changing shaders runtime
 			m_keyboardManager = new KeyboardManager(this);
 			m_cameraProvider = new CameraProvider(this);
@@ -53,7 +54,7 @@ namespace Client3D
 		{
 			const string mapname = "voxelmap.dat";
 
-			bool newmap = false;
+			bool newmap = true;
 
 			VoxelMap map;
 
@@ -63,11 +64,15 @@ namespace Client3D
 			}
 			else
 			{
-				map = VoxelMap.CreateFromTileData(new GameMap().Grid);
+				//map = VoxelMap.CreateFromTileData(new GameMap().Grid);
 				//map = VoxelMap.CreateBallMap(32, 16);
-				//map = VoxelMapGen.CreateTerrain(new IntSize3(128, 128, 64));
+				map = VoxelMapGen.CreateTerrain(new IntSize3(128, 128, 32));
+				//map = VoxelMap.CreateSlopeTest1();
+				//map = VoxelMap.CreateSlopeTest2();
+				//map = VoxelMap.CreateSlopeTest2();
+				//map = VoxelMap.CreateSlopeTest3();
 
-
+				//map.CheckSlopeDirs();
 				map.UndefineHiddenVoxels();
 				map.CheckVisibleFaces();
 

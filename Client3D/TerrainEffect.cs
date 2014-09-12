@@ -23,7 +23,6 @@ namespace Client3D
 	{
 		EffectConstantBuffer m_perObConstBuf;
 		EffectParameter m_objectWorldMatrixParam;
-		VertexInputLayout m_vertexInputLayout = VertexInputLayout.New<TerrainVertex>(0);
 
 		public TerrainEffect(GraphicsDevice device, EffectData effectData)
 			: base(device, effectData)
@@ -66,8 +65,6 @@ namespace Client3D
 		protected override EffectPass OnApply(EffectPass pass)
 		{
 			var device = this.GraphicsDevice;
-
-			device.SetVertexInputLayout(m_vertexInputLayout);
 
 			return base.OnApply(pass);
 		}
@@ -152,6 +149,27 @@ namespace Client3D
 		{
 			this.Position = new Byte4(pos.X, pos.Y, pos.Z, 0);
 			this.Occlusion = occlusion;
+			this.TexPack = new Byte4((byte)0, (byte)tex.Symbol1, (byte)tex.Symbol2, (byte)0);
+			this.ColorPack = new Byte4((byte)tex.Color0, (byte)tex.Color1, (byte)tex.Color2, (byte)0);
+		}
+	}
+
+	[StructLayout(LayoutKind.Sequential, Pack = 1)]
+	struct SlopeVertex
+	{
+		[VertexElement("POSITION", SharpDX.DXGI.Format.R8G8B8A8_UInt)]
+		public Byte4 Position;
+		[VertexElement("TEXCOORD", SharpDX.DXGI.Format.R8G8B8A8_UInt)]
+		public Byte4 Tex;
+		[VertexElement("TEX", SharpDX.DXGI.Format.R8G8B8A8_UInt)]
+		public Byte4 TexPack;
+		[VertexElement("COLOR", SharpDX.DXGI.Format.R8G8B8A8_UInt)]
+		public Byte4 ColorPack;
+
+		public SlopeVertex(IntVector3 pos, Vector2 texCoord, FaceTexture tex)
+		{
+			this.Position = new Byte4(pos.X, pos.Y, pos.Z, 0);
+			this.Tex = new Byte4((int)texCoord.X, (int)texCoord.Y, 0, 0);
 			this.TexPack = new Byte4((byte)0, (byte)tex.Symbol1, (byte)tex.Symbol2, (byte)0);
 			this.ColorPack = new Byte4((byte)tex.Color0, (byte)tex.Color1, (byte)tex.Color2, (byte)0);
 		}

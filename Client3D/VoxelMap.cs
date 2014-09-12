@@ -16,6 +16,7 @@ namespace Client3D
 		Empty,
 		Rock,
 		Water,
+		Slope,
 	}
 
 	enum VoxelFlags : byte
@@ -26,11 +27,11 @@ namespace Client3D
 		Tree2 = 1 << 2,
 	}
 
-	[StructLayout(LayoutKind.Explicit, Size = 4)]
+	[StructLayout(LayoutKind.Explicit, Size = 8)]
 	struct Voxel
 	{
 		[FieldOffset(0)]
-		public uint Raw;
+		public ulong Raw;
 
 		[FieldOffset(0)]
 		public VoxelType Type;
@@ -38,6 +39,10 @@ namespace Client3D
 		public FaceDirectionBits VisibleFaces;
 		[FieldOffset(2)]
 		public VoxelFlags Flags;
+		[FieldOffset(3)]
+		public byte Dir;
+		[FieldOffset(4)]
+		public byte SlopeType;
 
 		public bool IsUndefined { get { return this.Type == VoxelType.Undefined; } }
 		public bool IsEmpty { get { return this.Type == VoxelType.Empty; } }
@@ -46,6 +51,7 @@ namespace Client3D
 		public readonly static Voxel Empty = new Voxel() { Type = VoxelType.Empty };
 		public readonly static Voxel Rock = new Voxel() { Type = VoxelType.Rock };
 		public readonly static Voxel Water = new Voxel() { Type = VoxelType.Water };
+		public readonly static Voxel Slope = new Voxel() { Type = VoxelType.Slope };
 	}
 
 	class VoxelMap
@@ -59,7 +65,7 @@ namespace Client3D
 
 		public VoxelMap(IntSize3 size)
 		{
-			System.Diagnostics.Trace.Assert(Marshal.SizeOf<Voxel>() == 4);
+			//System.Diagnostics.Trace.Assert(Marshal.SizeOf<Voxel>() == 4);
 
 			this.Size = size;
 			this.Grid = new Voxel[size.Depth, size.Height, size.Width];
@@ -88,6 +94,131 @@ namespace Client3D
 			return this.Grid[p.Z, p.Y, p.X];
 		}
 
+		public void CheckSlopeDirs()
+		{
+			var grid = this.Grid;
+
+			Parallel.For(0, this.Depth, z =>
+			{
+				for (int y = 0; y < this.Height; ++y)
+					for (int x = 0; x < this.Width; ++x)
+					{
+						if (grid[z, y, x].Type != VoxelType.Slope)
+							continue;
+
+						var p = new IntVector3(x, y, z);
+
+						CheckSlopeForTile(p, ref grid[z, y, x]);
+					}
+			});
+		}
+
+		void CheckSlopeForTile(IntVector3 p, ref Voxel vox)
+		{
+			var plane = this.Size.Plane;
+
+			DirectionSet dirSet = new DirectionSet();
+
+			var ivec = Direction.East.ToIntVector2();
+			for (int i = 0; i < 8; ++i)
+			{
+				var np = p + ivec;
+
+				if (plane.Contains(np.ToIntVector2()) && this.Grid[np.Z, np.Y, np.X].Type == VoxelType.Rock)
+					dirSet |= ivec.ToDirection().ToDirectionSet();
+
+				ivec = ivec.FastRotate(1);
+			}
+
+			if (dirSet == DirectionSet.None)
+				return;
+			//throw new Exception();
+
+			/* in problematic cases we just pick one slope direction */
+
+			switch (dirSet & DirectionSet.Cardinal)
+			{
+				case DirectionSet.East:
+				case DirectionSet.North | DirectionSet.East | DirectionSet.South:
+					vox.SlopeType = 0;
+					vox.Dir = 1;
+					return;
+
+				case DirectionSet.South:
+				case DirectionSet.East | DirectionSet.South | DirectionSet.West:
+					vox.SlopeType = 0;
+					vox.Dir = 3;
+					return;
+
+				case DirectionSet.West:
+				case DirectionSet.West | DirectionSet.East:
+				case DirectionSet.South | DirectionSet.West | DirectionSet.North:
+					vox.SlopeType = 0;
+					vox.Dir = 0;
+					return;
+
+				case DirectionSet.North:
+				case DirectionSet.North | DirectionSet.South:
+				case DirectionSet.West | DirectionSet.North | DirectionSet.East:
+				case DirectionSet.West | DirectionSet.North | DirectionSet.East | DirectionSet.South:
+					vox.SlopeType = 0;
+					vox.Dir = 2;
+					return;
+
+				case DirectionSet.East | DirectionSet.North:
+					vox.SlopeType = 1;
+					vox.Dir = 2;
+					return;
+
+				case DirectionSet.East | DirectionSet.South:
+					vox.SlopeType = 1;
+					vox.Dir = 1;
+					return;
+
+				case DirectionSet.West | DirectionSet.South:
+					vox.SlopeType = 1;
+					vox.Dir = 3;
+					return;
+
+				case DirectionSet.West | DirectionSet.North:
+					vox.SlopeType = 1;
+					vox.Dir = 0;
+					return;
+
+				default:
+					break;
+			}
+
+			if ((dirSet & DirectionSet.NorthEast) != 0)
+			{
+				vox.SlopeType = 3;
+				vox.Dir = 2;
+				return;
+			}
+
+			if ((dirSet & DirectionSet.SouthEast) != 0)
+			{
+				vox.SlopeType = 3;
+				vox.Dir = 1;
+				return;
+			}
+
+			if ((dirSet & DirectionSet.SouthWest) != 0)
+			{
+				vox.SlopeType = 3;
+				vox.Dir = 3;
+				return;
+			}
+
+			if ((dirSet & DirectionSet.NorthWest) != 0)
+			{
+				vox.SlopeType = 3;
+				vox.Dir = 0;
+				return;
+			}
+		}
+
+
 		public void CheckVisibleFaces()
 		{
 			var grid = this.Grid;
@@ -103,10 +234,17 @@ namespace Client3D
 
 						foreach (var n in neighbors)
 						{
-							if (this.Size.Contains(n) == true && grid[n.Z, n.Y, n.X].IsEmpty == false)
-								continue;
-
 							var dir = (n - p).ToDirection();
+
+							if (this.Size.Contains(n) == true)
+							{
+								if (grid[n.Z, n.Y, n.X].Type == VoxelType.Rock || grid[n.Z, n.Y, n.X].Type == VoxelType.Undefined)
+									continue;
+
+								// slope above hides the top face, but not if the slope is at side or below
+								if (dir == Direction.Up && grid[n.Z, n.Y, n.X].Type == VoxelType.Slope)
+									continue;
+							}
 
 							grid[z, y, x].VisibleFaces |= dir.ToFaceDirectionBits();
 						}
@@ -171,6 +309,139 @@ namespace Client3D
 			}
 		}
 
+		class SlopeInfo
+		{
+			public byte SlopeType;
+			public byte Mask;
+		}
+
+		static SlopeInfo[] s_slopeInfos = new SlopeInfo[] {
+			// .XX
+			// . X
+			// ...
+			new SlopeInfo() { SlopeType = 4, Mask = (1 << 3) - 1, },
+			// XXX
+			// . X
+			// ...
+			new SlopeInfo() { SlopeType = 4, Mask = RotRight8((1 << 4) - 1, 1), },
+			// .XX
+			// . X
+			// ..X
+			new SlopeInfo() { SlopeType = 4, Mask = (1 << 4) - 1, },
+			// XXX
+			// . X
+			// ..X
+			new SlopeInfo() { SlopeType = 4, Mask = RotRight8((1 << 5) - 1, 1), },
+
+			// .X.
+			// . .
+			// ...
+			new SlopeInfo() { SlopeType = 0, Mask = RotRight8((1 << 1) - 1, 0), },
+			// .XX
+			// . .
+			// ...
+			new SlopeInfo() { SlopeType = 0, Mask = RotRight8((1 << 2) - 1, 0), },
+			// XX.
+			// . .
+			// ...
+			new SlopeInfo() { SlopeType = 0, Mask = RotRight8((1 << 2) - 1, 1), },
+			// XXX
+			// . .
+			// ...
+			new SlopeInfo() { SlopeType = 0, Mask = RotRight8((1 << 3) - 1, 1), },
+			// XXX
+			// X X
+			// ...
+			new SlopeInfo() { SlopeType = 0, Mask = RotRight8((1 << 5) - 1, 2), },
+			// XXX
+			// X X
+			// ..X
+			new SlopeInfo() { SlopeType = 0, Mask = RotRight8((1 << 6) - 1, 2), },
+			// XXX
+			// X X
+			// X..
+			new SlopeInfo() { SlopeType = 0, Mask = RotRight8((1 << 6) - 1, 3), },
+			// XXX
+			// X X
+			// X.X
+			new SlopeInfo() { SlopeType = 0, Mask = RotRight8((1 << 7) - 1, 3), },
+
+			// XXX
+			// X X
+			// .XX
+			new SlopeInfo() { SlopeType = 2, Mask = RotRight8((1 << 7) - 1, 2), },
+		};
+
+		static IntVector2[] s_surroundVectors = new IntVector2[8] {
+			new IntVector2(0, -1),
+			new IntVector2(1, -1),
+			new IntVector2(1, 0),
+			new IntVector2(1, 1),
+			new IntVector2(0, 1),
+			new IntVector2(-1, 1),
+			new IntVector2(-1, 0),
+			new IntVector2(-1, -1),
+		};
+
+		static byte RotLeft8(byte value, int count)
+		{
+			return (byte)((value << count) | (value >> (8 - count)));
+		}
+
+		static byte RotRight8(byte value, int count)
+		{
+			return (byte)((value >> count) | (value << (8 - count)));
+		}
+
+		bool CheckForSlope(IntVector3 p, ref Voxel voxel, int iv, SharpNoise.NoiseMap map)
+		{
+			int highDirs = 0;
+
+			for (int i = 0; i < 8; ++i)
+			{
+				var np = p + s_surroundVectors[i];
+
+				if (!this.Size.Contains(np) || (int)map[np.X, np.Y] >= iv)
+					highDirs |= 1 << i;
+			}
+
+			if (highDirs == 0 || highDirs == 0xff)
+				return false;
+
+			for (int i = 0; i < 4; ++i)
+			{
+				byte dir;
+				switch (i)
+				{
+					case 0: dir = 2; break;
+					case 1: dir = 1; break;
+					case 2: dir = 3; break;
+					case 3: dir = 0; break;
+					default:
+						throw new Exception();
+				}
+
+				foreach (var si in s_slopeInfos)
+				{
+					if (si.Mask == highDirs)
+					{
+						voxel = new Voxel()
+						{
+							Type = VoxelType.Slope,
+							Dir = dir,
+							SlopeType = si.SlopeType,
+						};
+
+						return true;
+					}
+				}
+
+				highDirs = RotRight8((byte)highDirs, 2);
+			}
+
+			return false;
+		}
+
 		public void FillFromNoiseMap(SharpNoise.NoiseMap map)
 		{
 			var max = map.Data.Max();
@@ -195,6 +466,7 @@ namespace Client3D
 			int grassLimit = this.Depth * 8 / 10;
 
 			Parallel.For(0, this.Height, y =>
+			//for (int y = 0; y < this.Height; ++y)
 			{
 				for (int x = 0; x < this.Width; ++x)
 				{
@@ -207,15 +479,20 @@ namespace Client3D
 						/* above ground */
 						if (z > iv)
 						{
-							if (z < waterLimit)
-								grid[z, y, x] = Voxel.Water;
-							else
-								grid[z, y, x] = Voxel.Empty;
+							//if (z < waterLimit)
+							//	grid[z, y, x] = Voxel.Water;
+							//else
+							grid[z, y, x] = Voxel.Empty;
 						}
 						/* surface */
 						else if (z == iv)
 						{
-							grid[z, y, x] = Voxel.Rock;
+							bool isSlope;
+
+							isSlope = CheckForSlope(new IntVector3(x, y, z), ref grid[z, y, x], iv, map);
+
+							if (!isSlope)
+								grid[z, y, x] = Voxel.Rock;
 
 							if (z >= waterLimit && z < grassLimit)
 							{
@@ -241,6 +518,7 @@ namespace Client3D
 					}
 				}
 			});
+			//}
 		}
 
 		public static VoxelMap CreateBallMap(int side, int innerSide = 0)
@@ -267,6 +545,66 @@ namespace Client3D
 			});
 
 			return map;
+		}
+
+		public static VoxelMap CreateSlopeTest1()
+		{
+			var m = new VoxelMap(new IntSize3(16, 16, 16), Voxel.Empty);
+
+			m.Grid[8, 8, 8].Type = VoxelType.Rock;
+			m.Grid[8, 7, 7].Type = VoxelType.Slope;
+			m.Grid[8, 7, 8].Type = VoxelType.Slope;
+			m.Grid[8, 7, 9].Type = VoxelType.Slope;
+			m.Grid[8, 9, 7].Type = VoxelType.Slope;
+			m.Grid[8, 9, 8].Type = VoxelType.Slope;
+			m.Grid[8, 9, 9].Type = VoxelType.Slope;
+			m.Grid[8, 8, 7].Type = VoxelType.Slope;
+			m.Grid[8, 8, 9].Type = VoxelType.Slope;
+
+			return m;
+		}
+
+		public static VoxelMap CreateSlopeTest2()
+		{
+			var m = new VoxelMap(new IntSize3(16, 16, 16), Voxel.Empty);
+
+			m.Grid[8, 8, 8].Type = VoxelType.Rock;
+			m.Grid[8, 8, 7].Type = VoxelType.Rock;
+			m.Grid[8, 8, 9].Type = VoxelType.Rock;
+			m.Grid[8, 7, 8].Type = VoxelType.Rock;
+			m.Grid[8, 9, 8].Type = VoxelType.Rock;
+
+			m.Grid[8, 7, 7].Type = VoxelType.Slope;
+			m.Grid[8, 7, 9].Type = VoxelType.Slope;
+			m.Grid[8, 9, 7].Type = VoxelType.Slope;
+			m.Grid[8, 9, 9].Type = VoxelType.Slope;
+
+			m.Grid[8, 10, 7].Type = VoxelType.Slope;
+			m.Grid[8, 10, 8].Type = VoxelType.Slope;
+			m.Grid[8, 10, 9].Type = VoxelType.Slope;
+
+			return m;
+		}
+
+		public static VoxelMap CreateSlopeTest3()
+		{
+			var m = new VoxelMap(new IntSize3(16, 16, 16), Voxel.Empty);
+
+			for (int type = 0; type < 5; ++type)
+			{
+				for (int i = 0; i < 4; ++i)
+				{
+					m.Grid[2 + type * 2, 8, 4 + i * 2] = new Voxel()
+					{
+						Type = VoxelType.Slope,
+						SlopeType = (byte)type,
+						Dir = (byte)i,
+						VisibleFaces = FaceDirectionBits.All,
+					};
+				}
+			}
+
+			return m;
 		}
 
 		public static VoxelMap CreateFromTileData(TileData[, ,] tileData)
@@ -317,6 +655,14 @@ namespace Client3D
 				return;
 			}
 
+			if (td.TerrainID.IsSlope())
+			{
+				grid[z, y, x].Type = VoxelType.Slope;
+				if (td.IsGreen)
+					grid[z, y, x].Flags |= VoxelFlags.Grass;
+				return;
+			}
+
 			if (td.IsGreen)
 			{
 				grid[z - 1, y, x].Flags |= VoxelFlags.Grass;
@@ -352,7 +698,7 @@ namespace Client3D
 					for (int y = 0; y < h; ++y)
 						for (int x = 0; x < w; ++x)
 						{
-							grid[z, y, x].Raw = br.ReadUInt32();
+							grid[z, y, x].Raw = br.ReadUInt64();
 						}
 
 				return map;

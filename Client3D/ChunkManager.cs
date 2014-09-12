@@ -18,11 +18,13 @@ namespace Client3D
 		{
 			public Chunk Chunk;
 			public VertexList<TerrainVertex> TerrainVertexList;
+			public VertexList<SlopeVertex> SlopeVertexList;
 			public VertexList<SceneryVertex> SceneryVertexList;
 
 			public VertexListCacheItem()
 			{
 				this.TerrainVertexList = new VertexList<TerrainVertex>(Chunk.MAX_VERTICES_PER_CHUNK);
+				this.SlopeVertexList = new VertexList<SlopeVertex>(Chunk.MAX_VERTICES_PER_CHUNK);
 				this.SceneryVertexList = new VertexList<SceneryVertex>(Chunk.VOXELS_PER_CHUNK);
 			}
 		}
@@ -291,7 +293,8 @@ namespace Client3D
 				{
 					var cacheItem = m_vertexCacheStack.Take();
 
-					chunk.GenerateVertices(m_scene, cameraChunkPos, cacheItem.TerrainVertexList, cacheItem.SceneryVertexList);
+					chunk.GenerateVertices(m_scene, cameraChunkPos, cacheItem.TerrainVertexList, 
+						cacheItem.SlopeVertexList, cacheItem.SceneryVertexList);
 
 					cacheItem.Chunk = chunk;
 					m_vertexCacheQueue.Add(cacheItem);
@@ -310,6 +313,7 @@ namespace Client3D
 				var chunk = cacheItem.Chunk;
 
 				chunk.UpdateVertexBuffer(m_scene.Game.GraphicsDevice, cacheItem.TerrainVertexList);
+				chunk.UpdateSlopeVertexBuffer(m_scene.Game.GraphicsDevice, cacheItem.SlopeVertexList);
 				chunk.UpdateSceneryVertexBuffer(m_scene.Game.GraphicsDevice, cacheItem.SceneryVertexList);
 
 				chunk.IsValid = true;
@@ -372,6 +376,18 @@ namespace Client3D
 
 			this.VerticesRendered = numVertices;
 			this.ChunksRendered = numChunks;
+		}
+
+		public void DrawSlopes()
+		{
+			var device = m_scene.Game.GraphicsDevice;
+
+			foreach (var chunk in m_drawList)
+			{
+				m_scene.Effect.SetPerObjectConstBuf(chunk.ChunkOffset);
+
+				chunk.DrawSlopes(device);
+			}
 		}
 
 		public void DrawTrees()
