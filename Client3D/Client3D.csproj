@@ -175,6 +175,9 @@
   <ItemGroup>
     <ToolkitFxc Include="Content\SymbolEffect.fx" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Greedy.cs" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>

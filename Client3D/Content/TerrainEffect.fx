@@ -8,6 +8,7 @@ struct VS_IN
 	uint4 occlusion : OCCLUSION;
 	uint4 texPack : TEX;
 	uint4 colorPack : COLOR;
+	uint4 size : SIZE;
 };
 
 struct GS_IN
@@ -23,6 +24,7 @@ struct GS_IN
 	nointerpolation uint4 occlusion : OCCLUSION;
 	nointerpolation uint4 texPack : TEX;
 	nointerpolation uint4 colorPack : COLOR;
+	nointerpolation uint2 size : SIZE;
 };
 
 struct PS_IN
@@ -33,6 +35,7 @@ struct PS_IN
 	nointerpolation uint4 occlusion : OCCLUSION;
 	nointerpolation uint4 texPack : TEX;
 	nointerpolation uint4 colorPack : COLOR;
+	uint2 size : SIZE;
 };
 
 Buffer<float3> g_colorBuffer;		// GameColor -> RGB
@@ -92,6 +95,7 @@ GS_IN VSMain(VS_IN input)
 	output.occlusion = input.occlusion;
 	output.texPack = input.texPack;
 	output.colorPack = input.colorPack;
+	output.size = input.size.xy;
 
 	return output;
 }
@@ -109,8 +113,8 @@ void GSMain(point GS_IN inputs[1], inout TriangleStream<PS_IN> OutputStream)
 
 	output.texPack = input.texPack;
 	output.colorPack = input.colorPack;
-
 	output.occlusion = input.occlusion;
+	output.size = input.size;
 
 	OutputStream.Append(output);
 
@@ -178,7 +182,7 @@ float4 PSMain(PS_IN input) : SV_Target
 
 	if (!g_disableBorders)
 	{
-		float2 ddEdge = fwidth(input.tex);
+		float2 ddEdge = fwidth(input.tex * input.size);
 
 #if SIMPLE_BORDER
 		float val = min(input.tex.x, input.tex.y);
@@ -187,7 +191,7 @@ float4 PSMain(PS_IN input) : SV_Target
 
 		border = smoothstep(0, 0.05f, val) * 0.7f + 0.3f;
 #else
-		float2 edgeDist2 = min(input.tex, 1.0f - input.tex);
+		float2 edgeDist2 = min(frac(input.tex * input.size), 1.0f - frac(input.tex * input.size));
 		float edgeDist = min(edgeDist2.x, edgeDist2.y);
 
 		float constWidth = min(ddEdge.x, ddEdge.y);
@@ -218,6 +222,8 @@ float4 PSMain(PS_IN input) : SV_Target
 
 	if (!g_disableTexture)
 	{
+		input.tex *= input.size;
+
 		float4 c1;
 		c1 = blockTextures.Sample(blockSampler, float3(input.tex, input.texPack[1]));
 		c1 = float4(c1.rgb * g_colorBuffer[input.colorPack[1]], c1.a);

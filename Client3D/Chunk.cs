@@ -12,6 +12,7 @@ using SharpDX;
 using SharpDX.Direct3D11;
 using SharpDX.Toolkit.Graphics;
 using Buffer = SharpDX.Toolkit.Graphics.Buffer;
+using System.Diagnostics;
 
 namespace Client3D
 {
@@ -195,11 +196,97 @@ namespace Client3D
 			if (diff.Z <= 0)
 				visibleChunkFaces |= FaceDirectionBits.NegativeZ;
 
-			GenerateVertices(ref viewGrid, visibleChunkFaces, terrainVertexList, sceneryVertexList);
+			//GenerateVertices(ref viewGrid, visibleChunkFaces, terrainVertexList, sceneryVertexList);
+
+			m_terrainVertexList = terrainVertexList;
+			var g = new Greedy(this);
+			g.Run(GenerateQuad, visibleChunkFaces);
+			m_terrainVertexList = null;
 
 			this.VertexCount = terrainVertexList.Count;
 			this.SceneryVertexCount = sceneryVertexList.Count;
 		}
+
+		VertexList<TerrainVertex> m_terrainVertexList;
+
+		void GenerateQuad(Vector3 bottomLeft,
+		  Vector3 topLeft,
+		  Vector3 topRight,
+		  Vector3 bottomRight,
+		  int width,
+		  int height,
+		  Client3D.Greedy.VoxelFace voxel,
+		  bool backFace)
+		{
+			/*
+			Trace.TraceError("quad ({0}),({1}),({2}),({3}), size {4}x{5}, side {6}",
+				bottomLeft, topLeft, topRight, bottomRight,
+				width, height,
+				voxel.Side);
+			*/
+			FaceTexture tex = new FaceTexture();
+
+			switch (voxel.Type)
+			{
+				case VoxelType.Undefined:
+					tex.Symbol1 = SymbolID.Unknown;
+					tex.Color1 = GameColor.LightGray;
+					break;
+
+				case VoxelType.Water:
+					tex.Symbol1 = SymbolID.Water;
+					tex.Color0 = GameColor.MediumBlue;
+					tex.Color1 = GameColor.SeaGreen;
+					break;
+
+				case VoxelType.Rock:
+					tex.Color0 = GameColor.LightGray;
+					tex.Symbol1 = SymbolID.Wall;
+					tex.Color1 = GameColor.LightGray;
+
+					if (voxel.Side == FaceDirection.PositiveZ)
+					{
+						if ((voxel.Flags & VoxelFlags.Grass) != 0)
+						{
+							tex.Color0 = GameColor.LightGreen;
+							tex.Symbol1 = SymbolID.Grass;
+							tex.Color1 = GameColor.LightGreen;
+						}
+						else
+						{
+							tex.Color0 = GameColor.LightGray;
+							tex.Symbol1 = SymbolID.Floor;
+							tex.Color1 = GameColor.LightGray;
+						}
+					}
+
+					break;
+			}
+
+			TerrainVertex ver;
+
+			// XXX and width & height are wrong way around
+
+			if (backFace)
+			{
+				ver = new TerrainVertex(topLeft.ToIntVector3(), bottomLeft.ToIntVector3(),
+					bottomRight.ToIntVector3(), topRight.ToIntVector3(),
+					voxel.Occ.W, voxel.Occ.Z, voxel.Occ.Y, voxel.Occ.X,
+					tex,
+					height, width);
+				m_terrainVertexList.Add(ver);
+			}
+			else
+			{
+				ver = new TerrainVertex(topRight.ToIntVector3(), bottomRight.ToIntVector3(),
+					bottomLeft.ToIntVector3(), topLeft.ToIntVector3(),
+					voxel.Occ.X, voxel.Occ.Y, voxel.Occ.Z, voxel.Occ.W,
+					tex,
+					height, width);
+				m_terrainVertexList.Add(ver);
+			}
+		}
+
 
 		void GenerateVertices(ref IntGrid3 viewGrid, FaceDirectionBits visibleChunkFaces,
 			VertexList<TerrainVertex> terrainVertexList,
@@ -352,7 +439,7 @@ namespace Client3D
 							off[d0] = dim[d0] - 1;
 
 						var vd = new TerrainVertex(v0 + off, v1 + off, v2 + off, v3 + off,
-							occlusion, occlusion, occlusion, occlusion, tex);
+							occlusion, occlusion, occlusion, occlusion, tex, 1, 1);
 						vertexList.Add(vd);
 					}
 			}
@@ -509,20 +596,22 @@ namespace Client3D
 						out occ0, out occ1, out occ2, out occ3);
 				}
 				var vd = new TerrainVertex(v0, v1, v2, v3, occ0, occ1, occ2, occ3,
-					side == (int)FaceDirection.PositiveZ ? topTexture : baseTexture);
+					side == (int)FaceDirection.PositiveZ ? topTexture : baseTexture, 1, 1);
 				vertexList.Add(vd);
 			}
 		}
 
-		bool IsBlocker(IntVector3 p)
+		public static bool IsBlocker(IntVector3 p)
 		{
-			if (m_map.Size.Contains(p) == false)
+			if (GlobalData.VoxelMap.Size.Contains(p) == false)
 				return false;
 
-			return m_map.Grid[p.Z, p.Y, p.X].IsOpaque;
+			var td = GlobalData.VoxelMap.Grid[p.Z, p.Y, p.X];
+
+			return td.IsOpaque;
 		}
 
-		void GetOcclusionsForFace(IntVector3 p, FaceDirection face,
+		public static void GetOcclusionsForFace(IntVector3 p, FaceDirection face,
 			out int o0, out int o1, out int o2, out int o3)
 		{
 			var odata = s_cubeFaceInfo[(int)face].OcclusionVectors;

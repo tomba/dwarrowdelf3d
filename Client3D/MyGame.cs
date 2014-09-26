@@ -97,7 +97,7 @@ namespace Client3D
 		{
 			const string mapname = "voxelmap.dat";
 
-			bool newmap = false;
+			bool newmap = true;
 
 			VoxelMap map;
 
@@ -112,9 +112,9 @@ namespace Client3D
 			{
 				var sw = Stopwatch.StartNew();
 
-				//map = VoxelMap.CreateBallMap(32, 16);
+				map = VoxelMap.CreateBallMap(32, 16);
 				//map = VoxelMap.CreateCubeMap(32, 1);
-				map = VoxelMapGen.CreateTerrain(new IntSize3(128, 128, 64));
+				//map = VoxelMapGen.CreateTerrain(new IntSize3(128, 128, 64));
 
 				map.CheckVisibleFaces(true);
 

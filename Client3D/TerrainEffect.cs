@@ -36,7 +36,7 @@ namespace Client3D
 			base.Initialize();
 
 			if (this.Parameters.Contains("blockSampler"))
-				this.Parameters["blockSampler"].SetResource(this.GraphicsDevice.SamplerStates.LinearClamp);
+				this.Parameters["blockSampler"].SetResource(this.GraphicsDevice.SamplerStates.LinearWrap);
 
 			m_perObConstBuf = this.ConstantBuffers["PerObjectBuffer"];
 			m_objectWorldMatrixParam = m_perObConstBuf.Parameters["g_chunkOffset"];
@@ -153,10 +153,12 @@ namespace Client3D
 		public Byte4 TexPack;
 		[VertexElement("COLOR", SharpDX.DXGI.Format.R8G8B8A8_UInt)]
 		public Byte4 ColorPack;
+		[VertexElement("SIZE", SharpDX.DXGI.Format.R8G8B8A8_UInt)]
+		public Byte4 Size;
 
 		// vertices in order: top right, bottom right, bottom left, top left
 		public TerrainVertex(IntVector3 p0, IntVector3 p1, IntVector3 p2, IntVector3 p3,
-			int occ0, int occ1, int occ2, int occ3, FaceTexture tex)
+			int occ0, int occ1, int occ2, int occ3, FaceTexture tex, int w, int h)
 		{
 			// last bytes of positions are unused
 			this.Position0 = new Byte4(p3.X, p3.Y, p3.Z, 0);
@@ -166,6 +168,7 @@ namespace Client3D
 			this.Occlusion = new Byte4(occ3, occ0, occ2, occ1);
 			this.TexPack = new Byte4((byte)0, (byte)tex.Symbol1, (byte)tex.Symbol2, (byte)0);
 			this.ColorPack = new Byte4((byte)tex.Color0, (byte)tex.Color1, (byte)tex.Color2, (byte)0);
+			this.Size = new Byte4(w, h, 0, 0);
 		}
 	}
 }
