@@ -237,16 +237,16 @@ namespace Client3D
 							sceneryVertexList.Add(new SceneryVertex(pos.ToVector3(), Color.LightGreen,
 								(int)Dwarrowdelf.Client.SymbolID.ConiferousTree));
 
-							if (vox.Type != VoxelType.Empty)
+							if (vox.Type != VoxelType.Floor)
 								throw new Exception();
-
-							continue; ;
 						}
 
 						if (vox.Type == VoxelType.Empty)
 							continue;
 
-						HandleVoxel(p, ref vox, ref viewGrid, visibleChunkFaces, terrainVertexList);
+						bool isFloor = vox.Type == VoxelType.Floor;
+
+						HandleVoxel(p, ref vox, ref viewGrid, visibleChunkFaces, terrainVertexList, isFloor);
 					}
 				}
 			}
@@ -333,10 +333,10 @@ namespace Client3D
 
 				var vertices = s_cubeFaceInfo[side].Vertices;
 
-				IntVector3 v0 = vertices[0] + offset;
-				IntVector3 v1 = vertices[1] + offset;
-				IntVector3 v2 = vertices[2] + offset;
-				IntVector3 v3 = vertices[3] + offset;
+				IntVector3 v0 = vertices[0] + offset * 8;
+				IntVector3 v1 = vertices[1] + offset * 8;
+				IntVector3 v2 = vertices[2] + offset * 8;
+				IntVector3 v3 = vertices[3] + offset * 8;
 
 				var vec1 = new IntVector3();
 				vec1[d1] = 1;
@@ -350,6 +350,7 @@ namespace Client3D
 						var off = vec1 * v + vec2 * u;
 						if (posFace)
 							off[d0] = dim[d0] - 1;
+						off *= 8;
 
 						var vd = new TerrainVertex(v0 + off, v1 + off, v2 + off, v3 + off,
 							occlusion, occlusion, occlusion, occlusion, tex);
@@ -381,6 +382,7 @@ namespace Client3D
 					break;
 
 				case VoxelType.Rock:
+				case VoxelType.Floor:
 					baseTexture.Color0 = GameColor.LightGray;
 					baseTexture.Symbol1 = SymbolID.Wall;
 					baseTexture.Color1 = GameColor.LightGray;
@@ -409,7 +411,7 @@ namespace Client3D
 		}
 
 		void HandleVoxel(IntVector3 p, ref Voxel vox, ref IntGrid3 viewGrid, Direction visibleChunkFaces,
-			VertexList<TerrainVertex> vertexList)
+			VertexList<TerrainVertex> vertexList, bool isFloor)
 		{
 			FaceTexture baseTexture, topTexture;
 
@@ -473,11 +475,12 @@ namespace Client3D
 			if (visibleFaces == 0)
 				return;
 
-			CreateCube(p, visibleFaces, visibleHiddenFaces, ref baseTexture, ref topTexture, vertexList);
+			CreateCube(p, visibleFaces, visibleHiddenFaces, ref baseTexture, ref topTexture, vertexList, isFloor);
 		}
 
 		void CreateCube(IntVector3 p, Direction visibleFaces, Direction visibleHiddenFaces,
-			ref FaceTexture baseTexture, ref FaceTexture topTexture, VertexList<TerrainVertex> vertexList)
+			ref FaceTexture baseTexture, ref FaceTexture topTexture, VertexList<TerrainVertex> vertexList,
+			bool isFloor)
 		{
 			var offset = p - this.ChunkOffset;
 
@@ -488,14 +491,19 @@ namespace Client3D
 				if ((sides & 1) == 0)
 					continue;
 
-				var vertices = s_cubeFaceInfo[side].Vertices;
+				IntVector3[] vertices;
+
+				if (isFloor)
+					vertices = s_cubeFaceInfo[side].FloorVertices;
+				else
+					vertices = s_cubeFaceInfo[side].Vertices;
 
 				IntVector3 v0, v1, v2, v3;
 
-				v0 = vertices[0] + offset;
-				v1 = vertices[1] + offset;
-				v2 = vertices[2] + offset;
-				v3 = vertices[3] + offset;
+				v0 = vertices[0] + offset * 8;
+				v1 = vertices[1] + offset * 8;
+				v2 = vertices[2] + offset * 8;
+				v3 = vertices[3] + offset * 8;
 
 				int occ0, occ1, occ2, occ3;
 
@@ -587,6 +595,11 @@ namespace Client3D
 				.Select(v => v + normal)								// add normal to lift from origin
 				.Select(v => v + new IntVector3(1, 1, 1))				// translate to [0,2]
 				.Select(v => v / 2)										// scale to [0,1]
+				.Select(v => v * 8)
+				.ToArray();
+
+			var floorVertices = vertices
+				.Select(v => v.SetZ(v.Z / 8))
 				.ToArray();
 
 			var occlusionVectors = new[] {
@@ -600,7 +613,7 @@ namespace Client3D
 				up - right,
 			}.Select(v => v + normal).ToArray();
 
-			return new CubeFaceInfo(vertices, occlusionVectors);
+			return new CubeFaceInfo(vertices, floorVertices, occlusionVectors);
 		}
 
 		/// <summary>
@@ -621,9 +634,10 @@ namespace Client3D
 
 		public class CubeFaceInfo
 		{
-			public CubeFaceInfo(IntVector3[] vertices, IntVector3[] occlusionVectors)
+			public CubeFaceInfo(IntVector3[] vertices, IntVector3[] floorVertices, IntVector3[] occlusionVectors)
 			{
 				this.Vertices = vertices;
+				this.FloorVertices = floorVertices;
 				this.OcclusionVectors = occlusionVectors;
 			}
 
@@ -631,6 +645,8 @@ namespace Client3D
 			/// Face vertices in [0,1] range
 			/// </summary>
 			public readonly IntVector3[] Vertices;
+
+			public readonly IntVector3[] FloorVertices;
 
 			/// <summary>
 			/// Occlusion help vectors. Vectors point to occlusing neighbors in clockwise order, starting from top.

@@ -13,6 +13,7 @@ namespace Client3D
 		Undefined = 0,
 		Empty,
 		Rock,
+		Floor,
 		Water,
 	}
 
@@ -44,12 +45,15 @@ namespace Client3D
 		/// <summary>
 		/// The voxel cannot be seen through
 		/// </summary>
-		public bool IsOpaque { get { return !this.IsTransparent; } }
+		public bool IsOpaque { get { return this.Type != VoxelType.Floor && !this.IsTransparent; } }
+
+		public bool IsOpaqueDown { get { return this.Type == VoxelType.Floor || this.Type == VoxelType.Rock; } }
 
 		public bool IsEmpty { get { return this.Type == VoxelType.Empty && this.Flags == 0; } }
 
 		public readonly static Voxel Empty = new Voxel() { Type = VoxelType.Empty };
 		public readonly static Voxel Rock = new Voxel() { Type = VoxelType.Rock };
+		public readonly static Voxel Floor = new Voxel() { Type = VoxelType.Floor };
 		public readonly static Voxel Water = new Voxel() { Type = VoxelType.Water };
 
 		public override string ToString()

@@ -69,10 +69,10 @@ GS_IN VSMain(VS_IN input)
 {
 	GS_IN output = (GS_IN)0;
 
-	float3 p0 = input.pos0.xyz;
-	float3 p1 = input.pos1.xyz;
-	float3 p2 = input.pos2.xyz;
-	float3 p3 = input.pos3.xyz;
+	float3 p0 = input.pos0.xyz / 8.0f;
+	float3 p1 = input.pos1.xyz / 8.0f;
+	float3 p2 = input.pos2.xyz / 8.0f;
+	float3 p3 = input.pos3.xyz / 8.0f;
 
 	p0 += g_chunkOffset;
 	p1 += g_chunkOffset;

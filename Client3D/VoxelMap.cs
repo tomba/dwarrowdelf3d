@@ -107,8 +107,16 @@ namespace Client3D
 				if (this.Size.Contains(n) == false)
 					continue;
 
-				if (this.Grid[n.Z, n.Y, n.X].IsOpaque)
-					continue;
+				if (dir == Direction.Up)
+				{
+					if (this.Grid[n.Z, n.Y, n.X].IsOpaqueDown)
+						continue;
+				}
+				else
+				{
+					if (this.Grid[n.Z, n.Y, n.X].IsOpaque)
+						continue;
+				}
 
 				visibleFaces |= dir;
 			}
@@ -160,7 +168,7 @@ namespace Client3D
 						/* surface */
 						else if (z == iv)
 						{
-							grid[z, y, x] = Voxel.Rock;
+							grid[z, y, x] = Voxel.Floor;
 
 							if (z >= waterLimit && z < grassLimit)
 							{
@@ -169,7 +177,7 @@ namespace Client3D
 								Dwarrowdelf.MWCRandom r = new MWCRandom(new IntVector3(x, y, z), 0);
 								if (r.Next(100) < 30)
 								{
-									grid[z + 1, y, x].Flags |= VoxelFlags.Tree;
+									grid[z, y, x].Flags |= VoxelFlags.Tree;
 									//grid[z, y, x].Flags |= VoxelFlags.Tree2;
 								}
 							}
