@@ -35,6 +35,7 @@ namespace Client3D
 
 			this.IsMouseVisible = true;
 			m_graphicsDeviceManager = new GraphicsDeviceManager(this);
+			m_graphicsDeviceManager.DeviceCreationFlags = SharpDX.Direct3D11.DeviceCreationFlags.Debug;
 			//this.GameSystems.Add(new EffectCompilerSystem(this));		// allows changing shaders runtime
 			m_keyboardManager = new KeyboardManager(this);
 			m_cameraProvider = new CameraProvider(this);
