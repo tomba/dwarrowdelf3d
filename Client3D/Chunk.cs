@@ -37,12 +37,16 @@ namespace Client3D
 
 		// Maximum number of vertices this Chunk has had
 		int m_maxVertices;
+		int m_maxSlopeVertices;
 
 		public bool IsValid { get; set; }
 		public bool IsEmpty { get; private set; }
 
 		Buffer<TerrainVertex> m_vertexBuffer;
 		public int VertexCount { get; private set; }
+
+		Buffer<SlopeVertex> m_slopeVertexBuffer;
+		public int SlopeVertexCount { get; private set; }
 
 		Buffer<SceneryVertex> m_sceneryVertexBuffer;
 		public int SceneryVertexCount { get; private set; }
@@ -97,6 +101,7 @@ namespace Client3D
 		public void Free()
 		{
 			Utilities.Dispose(ref m_vertexBuffer);
+			Utilities.Dispose(ref m_slopeVertexBuffer);
 			Utilities.Dispose(ref m_sceneryVertexBuffer);
 		}
 
@@ -117,6 +122,25 @@ namespace Client3D
 			}
 
 			m_vertexBuffer.SetData(vertexList.Data, 0, vertexList.Count);
+		}
+
+		public void UpdateSlopeVertexBuffer(GraphicsDevice device, VertexList<SlopeVertex> vertexList)
+		{
+			if (vertexList.Count == 0)
+				return;
+
+			if (m_slopeVertexBuffer == null || m_slopeVertexBuffer.ElementCount < vertexList.Count)
+			{
+				if (vertexList.Count > m_maxSlopeVertices)
+					m_maxSlopeVertices = vertexList.Count;
+
+				//System.Diagnostics.Trace.TraceError("Alloc {0}: {1} verts", this.ChunkOffset, m_maxVertices);
+
+				Utilities.Dispose(ref m_slopeVertexBuffer);
+				m_slopeVertexBuffer = Buffer.Vertex.New<SlopeVertex>(device, m_maxSlopeVertices);
+			}
+
+			m_slopeVertexBuffer.SetData(vertexList.Data, 0, vertexList.Count);
 		}
 
 		public void UpdateSceneryVertexBuffer(GraphicsDevice device, VertexList<SceneryVertex> vertexList)
@@ -142,6 +166,15 @@ namespace Client3D
 			device.Draw(PrimitiveType.LineListWithAdjacency, this.VertexCount);
 		}
 
+		public void DrawSlopes(GraphicsDevice device)
+		{
+			if (this.SlopeVertexCount == 0)
+				return;
+
+			device.SetVertexBuffer(m_slopeVertexBuffer);
+			device.Draw(PrimitiveType.TriangleList, this.SlopeVertexCount);
+		}
+
 		public void DrawTrees(GraphicsDevice device)
 		{
 			if (this.SceneryVertexCount == 0)
@@ -152,9 +185,11 @@ namespace Client3D
 		}
 
 		public void GenerateVertices(TerrainRenderer scene, IntVector3 cameraChunkPos,
-			VertexList<TerrainVertex> terrainVertexList, VertexList<SceneryVertex> sceneryVertexList)
+			VertexList<TerrainVertex> terrainVertexList, VertexList<SlopeVertex> slopeVertexList,
+			VertexList<SceneryVertex> sceneryVertexList)
 		{
 			terrainVertexList.Clear();
+			slopeVertexList.Clear();
 			sceneryVertexList.Clear();
 
 			var diff = cameraChunkPos - this.ChunkPosition;
@@ -173,14 +208,15 @@ namespace Client3D
 			if (diff.Z <= 0)
 				mask |= FaceDirectionBits.NegativeZ;
 
-			GenerateVertices(scene, mask, terrainVertexList, sceneryVertexList);
+			GenerateVertices(scene, mask, terrainVertexList, slopeVertexList, sceneryVertexList);
 
 			this.VertexCount = terrainVertexList.Count;
+			this.SlopeVertexCount = slopeVertexList.Count;
 			this.SceneryVertexCount = sceneryVertexList.Count;
 		}
 
 		void GenerateVertices(TerrainRenderer scene, FaceDirectionBits mask, VertexList<TerrainVertex> terrainVertexList,
-			VertexList<SceneryVertex> sceneryVertexList)
+			VertexList<SlopeVertex> slopeVertexList, VertexList<SceneryVertex> sceneryVertexList)
 		{
 			IntVector3 cutn = scene.ViewCorner1;
 			IntVector3 cutp = scene.ViewCorner2;
@@ -252,6 +288,12 @@ namespace Client3D
 							{
 								topTexture = baseTexture;
 							}
+						}
+
+						if (td.Type == VoxelType.Slope)
+						{
+							CreateSlope(p, scene, baseTexture, topTexture, mask, slopeVertexList);
+							continue;
 						}
 
 						CreateCubicBlock(p, scene, baseTexture, topTexture, mask, terrainVertexList);
@@ -409,6 +451,7 @@ namespace Client3D
 		static Chunk()
 		{
 			CreateCubeFaces();
+			CreateSlopes();
 
 			InitOcclusionLookup();
 		}
@@ -497,6 +540,230 @@ namespace Client3D
 					};
 				}
 			}
+		}
+
+		// SLOPES
+
+		void CreateSlope(IntVector3 p, TerrainRenderer scene,
+			FaceTexture baseTexture, FaceTexture topTexture,
+			FaceDirectionBits globalFaceMask, VertexList<SlopeVertex> vertexList)
+		{
+			var grid = m_map.Grid;
+
+			var offset = p - this.ChunkOffset;
+
+			// TODO: we could skip hidden sides
+
+			var vox = grid[p.Z, p.Y, p.X];
+
+			// slope
+			var vertices = s_slopes[vox.SlopeType][vox.Dir][0];
+
+			for (int i = 0; i < vertices.Length; ++i)
+			{
+				var vd = new SlopeVertex(vertices[i].Position.ToIntVector3() + offset,
+					vertices[i].TextureCoordinate,
+					topTexture);
+
+				vertexList.Add(vd);
+			}
+
+			// sides
+			vertices = s_slopes[vox.SlopeType][vox.Dir][1];
+
+			if (vertices != null)
+			{
+				for (int i = 0; i < vertices.Length; ++i)
+				{
+					var vd = new SlopeVertex(vertices[i].Position.ToIntVector3() + offset,
+						vertices[i].TextureCoordinate,
+						baseTexture);
+
+					vertexList.Add(vd);
+				}
+			}
+		}
+
+		// slopetype[5], slopedir[4], vertices[4]
+		static VertexPositionTexture[][][][] s_slopes;
+
+		static void CreateSlopes()
+		{
+			s_slopes = new VertexPositionTexture[5][][][];
+
+			/*  normal slope south */
+			var south = new Vector3[] {
+				new Vector3(-1, -1,  1),
+				new Vector3( 1, -1,  1),
+				new Vector3( 1,  1, -1),
+				new Vector3( 1,  1, -1),
+				new Vector3(-1,  1, -1),
+				new Vector3(-1, -1,  1),
+			};
+
+			var side = new VertexPositionTexture[] {
+				new VertexPositionTexture(new Vector3(-1, -1,  1), new Vector2(0, 0)),
+				new VertexPositionTexture(new Vector3(-1,  1, -1), new Vector2(1, 1)),
+				new VertexPositionTexture(new Vector3(-1, -1, -1), new Vector2(0, 1)),
+
+				new VertexPositionTexture(new Vector3( 1, -1, -1), new Vector2(1, 1)),
+				new VertexPositionTexture(new Vector3( 1,  1, -1), new Vector2(0, 1)),
+				new VertexPositionTexture(new Vector3( 1, -1,  1), new Vector2(1, 0)),
+			};
+
+			s_slopes[0] = CreateSlope(south, side);
+
+			/* SW corner slope with top flat */
+			south = new Vector3[] {
+				new Vector3(-1, -1,  1),
+				new Vector3( 1, -1,  1),
+				new Vector3( 1,  1,  1),
+
+				new Vector3(-1, -1,  1),
+				new Vector3( 1,  1,  1),
+				new Vector3(-1,  1, -1),
+			};
+
+			side = new VertexPositionTexture[] {
+				new VertexPositionTexture(new Vector3(-1, -1,  1), new Vector2(0, 0)),
+				new VertexPositionTexture(new Vector3(-1,  1, -1), new Vector2(1, 1)),
+				new VertexPositionTexture(new Vector3(-1, -1, -1), new Vector2(0, 1)),
+
+				new VertexPositionTexture(new Vector3( 1,  1,  1), new Vector2(1, 0)),
+				new VertexPositionTexture(new Vector3( 1,  1, -1), new Vector2(1, 1)),
+				new VertexPositionTexture(new Vector3(-1,  1, -1), new Vector2(0, 1)),
+			};
+
+			s_slopes[1] = CreateSlope(south, side);
+
+			/* SW corner slope in */
+			south = new Vector3[] {
+				new Vector3(-1, -1,  1),
+				new Vector3( 1, -1,  1),
+				new Vector3(-1,  1, -1),
+
+				new Vector3(-1,  1, -1),
+				new Vector3( 1, -1,  1),
+				new Vector3( 1,  1,  1),
+			};
+
+			side = new VertexPositionTexture[] {
+				new VertexPositionTexture(new Vector3(-1, -1,  1), new Vector2(0, 0)),
+				new VertexPositionTexture(new Vector3(-1,  1, -1), new Vector2(1, 1)),
+				new VertexPositionTexture(new Vector3(-1, -1, -1), new Vector2(0, 1)),
+
+				new VertexPositionTexture(new Vector3( 1,  1,  1), new Vector2(1, 0)),
+				new VertexPositionTexture(new Vector3( 1,  1, -1), new Vector2(1, 1)),
+				new VertexPositionTexture(new Vector3(-1,  1, -1), new Vector2(0, 1)),
+			};
+
+			s_slopes[2] = CreateSlope(south, side);
+
+			/* SW corner slope with bottom flat */
+			south = new Vector3[] {
+				new Vector3(-1, -1, -1),
+				new Vector3( 1, -1,  1),
+				new Vector3( 1,  1, -1),
+
+				new Vector3(-1, -1, -1),
+				new Vector3( 1,  1, -1),
+				new Vector3(-1,  1, -1),
+			};
+
+			side = new VertexPositionTexture[] {
+				new VertexPositionTexture(new Vector3( 1, -1,  1), new Vector2(0, 0)),
+				new VertexPositionTexture(new Vector3(-1, -1, -1), new Vector2(1, 1)),
+				new VertexPositionTexture(new Vector3( 1, -1, -1), new Vector2(0, 1)),
+
+				new VertexPositionTexture(new Vector3( 1, -1, -1), new Vector2(1, 1)),
+				new VertexPositionTexture(new Vector3( 1,  1, -1), new Vector2(0, 1)),
+				new VertexPositionTexture(new Vector3( 1, -1,  1), new Vector2(1, 0)),
+			};
+
+			s_slopes[3] = CreateSlope(south, side);
+
+			/* SW corner slope out */
+			south = new Vector3[] {
+				new Vector3(-1, -1, -1),
+				new Vector3( 1, -1,  1),
+				new Vector3(-1,  1, -1),
+
+				new Vector3(-1,  1, -1),
+				new Vector3( 1, -1,  1),
+				new Vector3( 1,  1, -1),
+			};
+
+			side = new VertexPositionTexture[] {
+				new VertexPositionTexture(new Vector3( 1, -1,  1), new Vector2(0, 0)),
+				new VertexPositionTexture(new Vector3(-1, -1, -1), new Vector2(1, 1)),
+				new VertexPositionTexture(new Vector3( 1, -1, -1), new Vector2(0, 1)),
+
+				new VertexPositionTexture(new Vector3( 1, -1, -1), new Vector2(1, 1)),
+				new VertexPositionTexture(new Vector3( 1,  1, -1), new Vector2(0, 1)),
+				new VertexPositionTexture(new Vector3( 1, -1,  1), new Vector2(1, 0)),
+			};
+
+			s_slopes[4] = CreateSlope(south, side);
+		}
+
+		static VertexPositionTexture[][][] CreateSlope(Vector3[] south, VertexPositionTexture[] sides)
+		{
+			Quaternion[] rotationQuaternions = new Quaternion[]
+			{
+				Quaternion.RotationAxis(Vector3.UnitZ, -MathUtil.PiOverTwo),
+				Quaternion.RotationAxis(Vector3.UnitZ, MathUtil.PiOverTwo),
+				Quaternion.RotationAxis(Vector3.UnitZ, 0),
+				Quaternion.RotationAxis(Vector3.UnitZ, MathUtil.Pi),
+				Quaternion.RotationAxis(Vector3.UnitX, MathUtil.PiOverTwo),
+				Quaternion.RotationAxis(Vector3.UnitX, -MathUtil.PiOverTwo),
+			};
+
+			var faces = new VertexPositionTexture[4][][];
+
+			for (int dir = 0; dir < 4; ++dir)
+			{
+				var face = new VertexPositionTexture[south.Length];
+
+				for (int vn = 0; vn < face.Length; ++vn)
+				{
+					var v = south[vn];
+					v = Vector3.Transform(v, rotationQuaternions[dir]);
+
+					Vector2 tex;
+					var iv = v.ToIntVector3();
+					if (iv.X == -1 && iv.Y == -1)
+						tex = new Vector2(0, 0);
+					else if (iv.X == 1 && iv.Y == -1)
+						tex = new Vector2(1, 0);
+					else if (iv.X == 1 && iv.Y == 1)
+						tex = new Vector2(1, 1);
+					else if (iv.X == -1 && iv.Y == 1)
+						tex = new Vector2(0, 1);
+					else
+						throw new Exception();
+
+					v /= 2.0f;
+					v += 0.5f;
+					face[vn] = new VertexPositionTexture(v, tex);
+				}
+
+				VertexPositionTexture[] side = null;
+				if (sides != null)
+				{
+					side = new VertexPositionTexture[sides.Length];
+
+					for (int vn = 0; vn < side.Length; ++vn)
+					{
+						var v = Vector3.Transform(sides[vn].Position, rotationQuaternions[dir]) / 2.0f;
+						v += 0.5f;
+						side[vn] = new VertexPositionTexture(v, sides[vn].TextureCoordinate);
+					}
+				}
+
+				faces[dir] = new VertexPositionTexture[2][] { face, side };
+			}
+
+			return faces;
 		}
 	}
 }

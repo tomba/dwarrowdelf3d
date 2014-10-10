@@ -13,6 +13,7 @@ namespace Client3D
 		Empty,
 		Rock,
 		Water,
+		Slope,
 	}
 
 	enum VoxelFlags : byte
@@ -23,11 +24,11 @@ namespace Client3D
 		Tree2 = 1 << 2,
 	}
 
-	[StructLayout(LayoutKind.Explicit, Size = 4)]
+	[StructLayout(LayoutKind.Explicit, Size = 8)]
 	struct Voxel
 	{
 		[FieldOffset(0)]
-		public uint Raw;
+		public ulong Raw;
 
 		[FieldOffset(0)]
 		public VoxelType Type;
@@ -35,6 +36,10 @@ namespace Client3D
 		public FaceDirectionBits VisibleFaces;
 		[FieldOffset(2)]
 		public VoxelFlags Flags;
+		[FieldOffset(3)]
+		public byte Dir;
+		[FieldOffset(4)]
+		public byte SlopeType;
 
 		public bool IsOpaque { get { return !(this.Type == VoxelType.Empty || this.Type == VoxelType.Undefined); } }
 
@@ -45,5 +50,6 @@ namespace Client3D
 		public readonly static Voxel Empty = new Voxel() { Type = VoxelType.Empty };
 		public readonly static Voxel Rock = new Voxel() { Type = VoxelType.Rock };
 		public readonly static Voxel Water = new Voxel() { Type = VoxelType.Water };
+		public readonly static Voxel Slope = new Voxel() { Type = VoxelType.Slope };
 	}
 }
