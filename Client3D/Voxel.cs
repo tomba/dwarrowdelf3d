@@ -14,6 +14,7 @@ namespace Client3D
 		Empty,
 		Rock,
 		Water,
+		Slope,
 	}
 
 	enum VoxelFlags : byte
@@ -24,11 +25,11 @@ namespace Client3D
 		Tree2 = 1 << 2,
 	}
 
-	[StructLayout(LayoutKind.Explicit, Size = 4)]
+	[StructLayout(LayoutKind.Explicit, Size = 8)]
 	struct Voxel
 	{
 		[FieldOffset(0)]
-		public uint Raw;
+		public ulong Raw;
 
 		[FieldOffset(0)]
 		public VoxelType Type;
@@ -36,21 +37,41 @@ namespace Client3D
 		public Direction VisibleFaces;
 		[FieldOffset(2)]
 		public VoxelFlags Flags;
+		[FieldOffset(3)]
+		public byte Dir;
+		[FieldOffset(4)]
+		public byte SlopeType;
 
 		/// <summary>
 		/// The voxel can be seen through, but may contain something to draw
 		/// </summary>
 		public bool IsTransparent { get { return this.Type == VoxelType.Empty; } }
+
 		/// <summary>
 		/// The voxel cannot be seen through
 		/// </summary>
-		public bool IsOpaque { get { return !this.IsTransparent; } }
+		public bool IsOpaque
+		{
+			get
+			{
+				switch (this.Type)
+				{
+					case VoxelType.Rock:
+					case VoxelType.Undefined:
+					case VoxelType.Water:
+						return true;
+					default:
+						return false;
+				}
+			}
+		}
 
 		public bool IsEmpty { get { return this.Type == VoxelType.Empty && this.Flags == 0; } }
 
 		public readonly static Voxel Empty = new Voxel() { Type = VoxelType.Empty };
 		public readonly static Voxel Rock = new Voxel() { Type = VoxelType.Rock };
 		public readonly static Voxel Water = new Voxel() { Type = VoxelType.Water };
+		public readonly static Voxel Slope = new Voxel() { Type = VoxelType.Slope };
 
 		public override string ToString()
 		{

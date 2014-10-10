@@ -10,6 +10,14 @@ struct VS_IN
 	uint4 colorPack : COLOR;
 };
 
+struct VSSlope_IN
+{
+	uint4 pos : POSITION;
+	uint4 tex: TEXCOORD;
+	uint4 texPack : TEX;
+	uint4 colorPack : COLOR;
+};
+
 struct GS_IN
 {
 	float4 pos0 : POSITION0;
@@ -90,6 +98,29 @@ GS_IN VSMain(VS_IN input)
 	output.pos3 = mul(float4(p3, 1), g_viewProjMatrix);
 
 	output.occlusion = input.occlusion;
+	output.texPack = input.texPack;
+	output.colorPack = input.colorPack;
+
+	return output;
+}
+
+PS_IN VSSlopeMain(VSSlope_IN input)
+{
+	PS_IN output = (PS_IN)0;
+
+	// Change the position vector to be 4 units for proper matrix calculations.
+	float4 pos = float4(input.pos.xyz, 1.0f);
+	pos.xyz += g_chunkOffset;
+
+	output.pos = pos;
+	output.posW = output.pos.xyz;
+	output.pos = mul(output.pos, g_viewProjMatrix);
+
+	output.tex = input.tex.xy;
+	output.occlusion[0] = 0;
+	output.occlusion[1] = 0;
+	output.occlusion[2] = 0;
+	output.occlusion[3] = 0;
 	output.texPack = input.texPack;
 	output.colorPack = input.colorPack;
 
@@ -236,11 +267,19 @@ float4 PSMain(PS_IN input) : SV_Target
 
 technique
 {
-	pass
+	pass VoxelPass
 	{
 		Profile = 10.0;
 		VertexShader = VSMain;
 		GeometryShader = GSMain;
+		PixelShader = PSMain;
+	}
+
+	pass SlopePass
+	{
+		Profile = 10.0;
+		VertexShader = VSSlopeMain;
+		GeometryShader = NULL;
 		PixelShader = PSMain;
 	}
 }

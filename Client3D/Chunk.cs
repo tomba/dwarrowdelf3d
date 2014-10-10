@@ -36,6 +36,7 @@ namespace Client3D
 
 		// Maximum number of vertices this Chunk has had
 		int m_maxVertices;
+		int m_maxSlopeVertices;
 
 		public bool IsValid { get; set; }
 
@@ -46,6 +47,9 @@ namespace Client3D
 
 		Buffer<TerrainVertex> m_vertexBuffer;
 		public int VertexCount { get; private set; }
+
+		Buffer<SlopeVertex> m_slopeVertexBuffer;
+		public int SlopeVertexCount { get; private set; }
 
 		Buffer<SceneryVertex> m_sceneryVertexBuffer;
 		public int SceneryVertexCount { get; private set; }
@@ -92,7 +96,7 @@ namespace Client3D
 			int z0 = chunkOffset.Z;
 			int z1 = chunkOffset.Z + CHUNK_SIZE - 1;
 
-			uint current = map.Grid[z0, y0, x0].Raw;
+			ulong current = map.Grid[z0, y0, x0].Raw;
 
 			for (int z = z0; z <= z1; ++z)
 			{
@@ -119,6 +123,7 @@ namespace Client3D
 		public void Free()
 		{
 			Utilities.Dispose(ref m_vertexBuffer);
+			Utilities.Dispose(ref m_slopeVertexBuffer);
 			Utilities.Dispose(ref m_sceneryVertexBuffer);
 		}
 
@@ -139,6 +144,25 @@ namespace Client3D
 			}
 
 			m_vertexBuffer.SetData(vertexList.Data, 0, vertexList.Count);
+		}
+
+		public void UpdateSlopeVertexBuffer(GraphicsDevice device, VertexList<SlopeVertex> vertexList)
+		{
+			if (vertexList.Count == 0)
+				return;
+
+			if (m_slopeVertexBuffer == null || m_slopeVertexBuffer.ElementCount < vertexList.Count)
+			{
+				if (vertexList.Count > m_maxSlopeVertices)
+					m_maxSlopeVertices = vertexList.Count;
+
+				//System.Diagnostics.Trace.TraceError("Alloc {0}: {1} verts", this.ChunkOffset, m_maxVertices);
+
+				Utilities.Dispose(ref m_slopeVertexBuffer);
+				m_slopeVertexBuffer = Buffer.Vertex.New<SlopeVertex>(device, m_maxSlopeVertices);
+			}
+
+			m_slopeVertexBuffer.SetData(vertexList.Data, 0, vertexList.Count);
 		}
 
 		public void UpdateSceneryVertexBuffer(GraphicsDevice device, VertexList<SceneryVertex> vertexList)
@@ -164,6 +188,15 @@ namespace Client3D
 			device.Draw(PrimitiveType.PointList, this.VertexCount);
 		}
 
+		public void DrawSlopes(GraphicsDevice device)
+		{
+			if (this.SlopeVertexCount == 0)
+				return;
+
+			device.SetVertexBuffer(m_slopeVertexBuffer);
+			device.Draw(PrimitiveType.TriangleList, this.SlopeVertexCount);
+		}
+
 		public void DrawTrees(GraphicsDevice device)
 		{
 			if (this.SceneryVertexCount == 0)
@@ -174,9 +207,11 @@ namespace Client3D
 		}
 
 		public void GenerateVertices(ref IntGrid3 viewGrid, IntVector3 cameraChunkPos,
-			VertexList<TerrainVertex> terrainVertexList, VertexList<SceneryVertex> sceneryVertexList)
+			VertexList<TerrainVertex> terrainVertexList, VertexList<SceneryVertex> sceneryVertexList,
+			VertexList<SlopeVertex> slopeVertexList)
 		{
 			terrainVertexList.Clear();
+			slopeVertexList.Clear();
 			sceneryVertexList.Clear();
 
 			var diff = cameraChunkPos - this.ChunkPosition;
@@ -195,15 +230,17 @@ namespace Client3D
 			if (diff.Z <= 0)
 				visibleChunkFaces |= Direction.NegativeZ;
 
-			GenerateVertices(ref viewGrid, visibleChunkFaces, terrainVertexList, sceneryVertexList);
+			GenerateVertices(ref viewGrid, visibleChunkFaces, terrainVertexList, sceneryVertexList, slopeVertexList);
 
 			this.VertexCount = terrainVertexList.Count;
+			this.SlopeVertexCount = slopeVertexList.Count;
 			this.SceneryVertexCount = sceneryVertexList.Count;
 		}
 
 		void GenerateVertices(ref IntGrid3 viewGrid, Direction visibleChunkFaces,
 			VertexList<TerrainVertex> terrainVertexList,
-			VertexList<SceneryVertex> sceneryVertexList)
+			VertexList<SceneryVertex> sceneryVertexList,
+			VertexList<SlopeVertex> slopeVertexList)
 		{
 			IntGrid3 chunkGrid = viewGrid.Intersect(new IntGrid3(this.ChunkOffset, Chunk.ChunkSize));
 
@@ -245,6 +282,12 @@ namespace Client3D
 
 						if (vox.Type == VoxelType.Empty)
 							continue;
+
+						if (vox.Type == VoxelType.Slope)
+						{
+							CreateSlope(p, ref vox, ref viewGrid, visibleChunkFaces, slopeVertexList);
+							continue;
+						}
 
 						HandleVoxel(p, ref vox, ref viewGrid, visibleChunkFaces, terrainVertexList);
 					}
@@ -400,6 +443,25 @@ namespace Client3D
 					else
 					{
 						topTexture = baseTexture;
+					}
+					break;
+
+				case VoxelType.Slope:
+					baseTexture.Color0 = GameColor.LightGray;
+					baseTexture.Symbol1 = SymbolID.Wall;
+					baseTexture.Color1 = GameColor.LightGray;
+
+					if ((vox.Flags & VoxelFlags.Grass) != 0)
+					{
+						topTexture.Color0 = GameColor.LightGreen;
+						topTexture.Symbol1 = SymbolID.Grass;
+						topTexture.Color1 = GameColor.LightGreen;
+					}
+					else
+					{
+						topTexture.Color0 = GameColor.LightGray;
+						topTexture.Symbol1 = SymbolID.Floor;
+						topTexture.Color1 = GameColor.LightGray;
 					}
 					break;
 
@@ -617,6 +679,8 @@ namespace Client3D
 			s_cubeFaceInfo[(int)DirectionOrdinal.South] = CreateFaceInfo(Direction.South, Direction.Up, Direction.East);
 			s_cubeFaceInfo[(int)DirectionOrdinal.Down] = CreateFaceInfo(Direction.Down, Direction.North, Direction.West);
 			s_cubeFaceInfo[(int)DirectionOrdinal.Up] = CreateFaceInfo(Direction.Up, Direction.North, Direction.East);
+
+			CreateSlopes();
 		}
 
 		public class CubeFaceInfo
@@ -636,6 +700,231 @@ namespace Client3D
 			/// Occlusion help vectors. Vectors point to occlusing neighbors in clockwise order, starting from top.
 			/// </summary>
 			public readonly IntVector3[] OcclusionVectors;
+		}
+
+		// SLOPES
+
+		void CreateSlope(IntVector3 p, ref Voxel vox, ref IntGrid3 viewGrid, Direction visibleChunkFaces,
+			VertexList<SlopeVertex> vertexList)
+		{
+			FaceTexture baseTexture, topTexture;
+
+			GetTextures(ref vox, out baseTexture, out topTexture);
+
+			var grid = m_map.Grid;
+
+			var offset = p - this.ChunkOffset;
+
+			// TODO: we could skip hidden sides
+
+			// slope
+			var vertices = s_slopes[vox.SlopeType][vox.Dir][0];
+
+			for (int i = 0; i < vertices.Length; ++i)
+			{
+				var vd = new SlopeVertex(vertices[i].Position.ToIntVector3() + offset,
+					vertices[i].TextureCoordinate,
+					topTexture);
+
+				vertexList.Add(vd);
+			}
+
+			// sides
+			vertices = s_slopes[vox.SlopeType][vox.Dir][1];
+
+			if (vertices != null)
+			{
+				for (int i = 0; i < vertices.Length; ++i)
+				{
+					var vd = new SlopeVertex(vertices[i].Position.ToIntVector3() + offset,
+						vertices[i].TextureCoordinate,
+						baseTexture);
+
+					vertexList.Add(vd);
+				}
+			}
+		}
+
+		// slopetype[5], slopedir[4], vertices[4]
+		static VertexPositionTexture[][][][] s_slopes;
+
+		static void CreateSlopes()
+		{
+			s_slopes = new VertexPositionTexture[5][][][];
+
+			/*  normal slope south */
+			var south = new Vector3[] {
+				new Vector3(-1, -1,  1),
+				new Vector3( 1, -1,  1),
+				new Vector3( 1,  1, -1),
+				new Vector3( 1,  1, -1),
+				new Vector3(-1,  1, -1),
+				new Vector3(-1, -1,  1),
+			};
+
+			var side = new VertexPositionTexture[] {
+				new VertexPositionTexture(new Vector3(-1, -1,  1), new Vector2(0, 0)),
+				new VertexPositionTexture(new Vector3(-1,  1, -1), new Vector2(1, 1)),
+				new VertexPositionTexture(new Vector3(-1, -1, -1), new Vector2(0, 1)),
+
+				new VertexPositionTexture(new Vector3( 1, -1, -1), new Vector2(1, 1)),
+				new VertexPositionTexture(new Vector3( 1,  1, -1), new Vector2(0, 1)),
+				new VertexPositionTexture(new Vector3( 1, -1,  1), new Vector2(1, 0)),
+			};
+
+			s_slopes[0] = CreateSlope(south, side);
+
+			/* SW corner slope with top flat */
+			south = new Vector3[] {
+				new Vector3(-1, -1,  1),
+				new Vector3( 1, -1,  1),
+				new Vector3( 1,  1,  1),
+
+				new Vector3(-1, -1,  1),
+				new Vector3( 1,  1,  1),
+				new Vector3(-1,  1, -1),
+			};
+
+			side = new VertexPositionTexture[] {
+				new VertexPositionTexture(new Vector3(-1, -1,  1), new Vector2(0, 0)),
+				new VertexPositionTexture(new Vector3(-1,  1, -1), new Vector2(1, 1)),
+				new VertexPositionTexture(new Vector3(-1, -1, -1), new Vector2(0, 1)),
+
+				new VertexPositionTexture(new Vector3( 1,  1,  1), new Vector2(1, 0)),
+				new VertexPositionTexture(new Vector3( 1,  1, -1), new Vector2(1, 1)),
+				new VertexPositionTexture(new Vector3(-1,  1, -1), new Vector2(0, 1)),
+			};
+
+			s_slopes[1] = CreateSlope(south, side);
+
+			/* SW corner slope in */
+			south = new Vector3[] {
+				new Vector3(-1, -1,  1),
+				new Vector3( 1, -1,  1),
+				new Vector3(-1,  1, -1),
+
+				new Vector3(-1,  1, -1),
+				new Vector3( 1, -1,  1),
+				new Vector3( 1,  1,  1),
+			};
+
+			side = new VertexPositionTexture[] {
+				new VertexPositionTexture(new Vector3(-1, -1,  1), new Vector2(0, 0)),
+				new VertexPositionTexture(new Vector3(-1,  1, -1), new Vector2(1, 1)),
+				new VertexPositionTexture(new Vector3(-1, -1, -1), new Vector2(0, 1)),
+
+				new VertexPositionTexture(new Vector3( 1,  1,  1), new Vector2(1, 0)),
+				new VertexPositionTexture(new Vector3( 1,  1, -1), new Vector2(1, 1)),
+				new VertexPositionTexture(new Vector3(-1,  1, -1), new Vector2(0, 1)),
+			};
+
+			s_slopes[2] = CreateSlope(south, side);
+
+			/* SW corner slope with bottom flat */
+			south = new Vector3[] {
+				new Vector3(-1, -1, -1),
+				new Vector3( 1, -1,  1),
+				new Vector3( 1,  1, -1),
+
+				new Vector3(-1, -1, -1),
+				new Vector3( 1,  1, -1),
+				new Vector3(-1,  1, -1),
+			};
+
+			side = new VertexPositionTexture[] {
+				new VertexPositionTexture(new Vector3( 1, -1,  1), new Vector2(0, 0)),
+				new VertexPositionTexture(new Vector3(-1, -1, -1), new Vector2(1, 1)),
+				new VertexPositionTexture(new Vector3( 1, -1, -1), new Vector2(0, 1)),
+
+				new VertexPositionTexture(new Vector3( 1, -1, -1), new Vector2(1, 1)),
+				new VertexPositionTexture(new Vector3( 1,  1, -1), new Vector2(0, 1)),
+				new VertexPositionTexture(new Vector3( 1, -1,  1), new Vector2(1, 0)),
+			};
+
+			s_slopes[3] = CreateSlope(south, side);
+
+			/* SW corner slope out */
+			south = new Vector3[] {
+				new Vector3(-1, -1, -1),
+				new Vector3( 1, -1,  1),
+				new Vector3(-1,  1, -1),
+
+				new Vector3(-1,  1, -1),
+				new Vector3( 1, -1,  1),
+				new Vector3( 1,  1, -1),
+			};
+
+			side = new VertexPositionTexture[] {
+				new VertexPositionTexture(new Vector3( 1, -1,  1), new Vector2(0, 0)),
+				new VertexPositionTexture(new Vector3(-1, -1, -1), new Vector2(1, 1)),
+				new VertexPositionTexture(new Vector3( 1, -1, -1), new Vector2(0, 1)),
+
+				new VertexPositionTexture(new Vector3( 1, -1, -1), new Vector2(1, 1)),
+				new VertexPositionTexture(new Vector3( 1,  1, -1), new Vector2(0, 1)),
+				new VertexPositionTexture(new Vector3( 1, -1,  1), new Vector2(1, 0)),
+			};
+
+			s_slopes[4] = CreateSlope(south, side);
+		}
+
+		static VertexPositionTexture[][][] CreateSlope(Vector3[] south, VertexPositionTexture[] sides)
+		{
+			Quaternion[] rotationQuaternions = new Quaternion[]
+			{
+				Quaternion.RotationAxis(Vector3.UnitZ, -MathUtil.PiOverTwo),
+				Quaternion.RotationAxis(Vector3.UnitZ, MathUtil.PiOverTwo),
+				Quaternion.RotationAxis(Vector3.UnitZ, 0),
+				Quaternion.RotationAxis(Vector3.UnitZ, MathUtil.Pi),
+				Quaternion.RotationAxis(Vector3.UnitX, MathUtil.PiOverTwo),
+				Quaternion.RotationAxis(Vector3.UnitX, -MathUtil.PiOverTwo),
+			};
+
+			var faces = new VertexPositionTexture[4][][];
+
+			for (int dir = 0; dir < 4; ++dir)
+			{
+				var face = new VertexPositionTexture[south.Length];
+
+				for (int vn = 0; vn < face.Length; ++vn)
+				{
+					var v = south[vn];
+					v = Vector3.Transform(v, rotationQuaternions[dir]);
+
+					Vector2 tex;
+					var iv = v.ToIntVector3();
+					if (iv.X == -1 && iv.Y == -1)
+						tex = new Vector2(0, 0);
+					else if (iv.X == 1 && iv.Y == -1)
+						tex = new Vector2(1, 0);
+					else if (iv.X == 1 && iv.Y == 1)
+						tex = new Vector2(1, 1);
+					else if (iv.X == -1 && iv.Y == 1)
+						tex = new Vector2(0, 1);
+					else
+						throw new Exception();
+
+					v /= 2.0f;
+					v += 0.5f;
+					face[vn] = new VertexPositionTexture(v, tex);
+				}
+
+				VertexPositionTexture[] side = null;
+				if (sides != null)
+				{
+					side = new VertexPositionTexture[sides.Length];
+
+					for (int vn = 0; vn < side.Length; ++vn)
+					{
+						var v = Vector3.Transform(sides[vn].Position, rotationQuaternions[dir]) / 2.0f;
+						v += 0.5f;
+						side[vn] = new VertexPositionTexture(v, sides[vn].TextureCoordinate);
+					}
+				}
+
+				faces[dir] = new VertexPositionTexture[2][] { face, side };
+			}
+
+			return faces;
 		}
 	}
 }

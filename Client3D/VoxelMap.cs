@@ -23,7 +23,7 @@ namespace Client3D
 
 		public VoxelMap(IntSize3 size)
 		{
-			System.Diagnostics.Trace.Assert(Marshal.SizeOf<Voxel>() == 4);
+			//System.Diagnostics.Trace.Assert(Marshal.SizeOf<Voxel>() == 4);
 
 			this.Size = size;
 			this.Grid = new Voxel[size.Depth, size.Height, size.Width];
@@ -110,6 +110,10 @@ namespace Client3D
 				if (this.Grid[n.Z, n.Y, n.X].IsOpaque)
 					continue;
 
+				// slope above hides the top face, but not if the slope is at side or below
+				if (dir == Direction.Up && this.Grid[n.Z, n.Y, n.X].Type == VoxelType.Slope)
+					continue;
+
 				visibleFaces |= dir;
 			}
 
@@ -152,15 +156,20 @@ namespace Client3D
 						/* above ground */
 						if (z > iv)
 						{
-							if (z < waterLimit)
-								grid[z, y, x] = Voxel.Water;
-							else
-								grid[z, y, x] = Voxel.Empty;
+							//if (z < waterLimit)
+							//	grid[z, y, x] = Voxel.Water;
+							//else
+							grid[z, y, x] = Voxel.Empty;
 						}
 						/* surface */
 						else if (z == iv)
 						{
-							grid[z, y, x] = Voxel.Rock;
+							bool isSlope;
+
+							isSlope = CheckForSlope(new IntVector3(x, y, z), ref grid[z, y, x], iv, map);
+
+							if (!isSlope)
+								grid[z, y, x] = Voxel.Rock;
 
 							if (z >= waterLimit && z < grassLimit)
 							{
@@ -278,6 +287,139 @@ namespace Client3D
 						memStream.CopyTo(stream);
 				}
 			}
+		}
+
+		class SlopeInfo
+		{
+			public byte SlopeType;
+			public byte Mask;
+		}
+
+		static SlopeInfo[] s_slopeInfos = new SlopeInfo[] {
+			// .XX
+			// . X
+			// ...
+			new SlopeInfo() { SlopeType = 4, Mask = (1 << 3) - 1, },
+			// XXX
+			// . X
+			// ...
+			new SlopeInfo() { SlopeType = 4, Mask = RotRight8((1 << 4) - 1, 1), },
+			// .XX
+			// . X
+			// ..X
+			new SlopeInfo() { SlopeType = 4, Mask = (1 << 4) - 1, },
+			// XXX
+			// . X
+			// ..X
+			new SlopeInfo() { SlopeType = 4, Mask = RotRight8((1 << 5) - 1, 1), },
+
+			// .X.
+			// . .
+			// ...
+			new SlopeInfo() { SlopeType = 0, Mask = RotRight8((1 << 1) - 1, 0), },
+			// .XX
+			// . .
+			// ...
+			new SlopeInfo() { SlopeType = 0, Mask = RotRight8((1 << 2) - 1, 0), },
+			// XX.
+			// . .
+			// ...
+			new SlopeInfo() { SlopeType = 0, Mask = RotRight8((1 << 2) - 1, 1), },
+			// XXX
+			// . .
+			// ...
+			new SlopeInfo() { SlopeType = 0, Mask = RotRight8((1 << 3) - 1, 1), },
+			// XXX
+			// X X
+			// ...
+			new SlopeInfo() { SlopeType = 0, Mask = RotRight8((1 << 5) - 1, 2), },
+			// XXX
+			// X X
+			// ..X
+			new SlopeInfo() { SlopeType = 0, Mask = RotRight8((1 << 6) - 1, 2), },
+			// XXX
+			// X X
+			// X..
+			new SlopeInfo() { SlopeType = 0, Mask = RotRight8((1 << 6) - 1, 3), },
+			// XXX
+			// X X
+			// X.X
+			new SlopeInfo() { SlopeType = 0, Mask = RotRight8((1 << 7) - 1, 3), },
+
+			// XXX
+			// X X
+			// .XX
+			new SlopeInfo() { SlopeType = 2, Mask = RotRight8((1 << 7) - 1, 2), },
+		};
+
+		static IntVector2[] s_surroundVectors = new IntVector2[8] {
+			new IntVector2(0, -1),
+			new IntVector2(1, -1),
+			new IntVector2(1, 0),
+			new IntVector2(1, 1),
+			new IntVector2(0, 1),
+			new IntVector2(-1, 1),
+			new IntVector2(-1, 0),
+			new IntVector2(-1, -1),
+		};
+
+		static byte RotLeft8(byte value, int count)
+		{
+			return (byte)((value << count) | (value >> (8 - count)));
+		}
+
+		static byte RotRight8(byte value, int count)
+		{
+			return (byte)((value >> count) | (value << (8 - count)));
+		}
+
+		bool CheckForSlope(IntVector3 p, ref Voxel voxel, int iv, SharpNoise.NoiseMap map)
+		{
+			int highDirs = 0;
+
+			for (int i = 0; i < 8; ++i)
+			{
+				var np = p + s_surroundVectors[i];
+
+				if (!this.Size.Contains(np) || (int)map[np.X, np.Y] >= iv)
+					highDirs |= 1 << i;
+			}
+
+			if (highDirs == 0 || highDirs == 0xff)
+				return false;
+
+			for (int i = 0; i < 4; ++i)
+			{
+				byte dir;
+				switch (i)
+				{
+					case 0: dir = 2; break;
+					case 1: dir = 1; break;
+					case 2: dir = 3; break;
+					case 3: dir = 0; break;
+					default:
+						throw new Exception();
+				}
+
+				foreach (var si in s_slopeInfos)
+				{
+					if (si.Mask == highDirs)
+					{
+						voxel = new Voxel()
+						{
+							Type = VoxelType.Slope,
+							Dir = dir,
+							SlopeType = si.SlopeType,
+						};
+
+						return true;
+					}
+				}
+
+				highDirs = RotRight8((byte)highDirs, 2);
+			}
+
+			return false;
 		}
 	}
 }
